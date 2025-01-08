@@ -41,4 +41,4 @@ jobs:
           app-name: 'autumn-blaze'
           slot-name: 'Production'
           package: ${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}
-          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_85C3AA3AF62C4ACDA073CB12D11BBF01 }}
+          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_2BBD60F8435C4CE3B96B55A743FD1E1A }}
