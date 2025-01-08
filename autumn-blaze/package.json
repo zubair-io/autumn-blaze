@@ -1,0 +1,28 @@
+{
+  "name": "autumn-blaze",
+  "version": "0.0.1",
+  "description": "",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc -w",
+    "clean": "rimraf dist",
+    "prestart": "npm run clean && npm run build",
+    "start": "concurrently \"npm run watch\" \"func start --typescript\"",
+    "test": "echo \"No tests yet...\""
+  },
+  "dependencies": {
+    "@azure/functions": "^4.0.0",
+    "azure-storage": "^2.10.7",
+    "csvtojson": "^2.0.10",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.9.3",
+    "og-easy": "^1.0.15"
+  },
+  "devDependencies": {
+    "@types/node": "^20.x",
+    "concurrently": "^9.1.2",
+    "rimraf": "^5.0.0",
+    "typescript": "5.7.2"
+  },
+  "main": "dist/src/{index.js,functions/*.js}"
+}
