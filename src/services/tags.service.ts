@@ -30,8 +30,8 @@ export class TagService {
     };
 
     const newTag = new Tag(defaultTag);
-    await newTag.save();
-    return [defaultTag];
+    const savedTag = await newTag.save();
+    return [savedTag];
   }
 
   async listUserTags(userId: string): Promise<ITag[]> {

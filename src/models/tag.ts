@@ -29,13 +29,7 @@ const TagSchema = new Schema(
   },
   {
     timestamps: true,
-    shardKey: { "sharing.sharedWith.userId": 1 }, // This is the shard key configuration
   }
 );
-
-TagSchema.index({
-  "sharing.sharedWith.userId": 1,
-  "sharing.sharedWith.accessLevel": 1,
-});
 
 export const Tag = mongoose.model<ITagDocument>("Tag", TagSchema);
