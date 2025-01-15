@@ -67,7 +67,7 @@ async function getTopAFOLPost(context: InvocationContext): Promise<AFOLPost[]> {
       return [];
     }
 
-    const posts = response.data.posts.map((post) => {
+    const posts = response.data.posts.map((post: any) => {
       // Extract media from the post
       const media: PostMedia[] = [];
       if (post.embed?.images) {
