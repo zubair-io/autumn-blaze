@@ -7,7 +7,7 @@ const TagSchema = new Schema(
   {
     type: {
       type: String,
-      enum: ["folder", "itemType", "genre", "custom"],
+      enum: ["folder", "itemType", "genre", "custom", "system"],
       required: true,
     },
     value: { type: String, required: true },
@@ -29,7 +29,7 @@ const TagSchema = new Schema(
   },
   {
     timestamps: true,
-  }
+  },
 );
 
 export const Tag = mongoose.model<ITagDocument>("Tag", TagSchema);

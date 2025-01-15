@@ -7,6 +7,8 @@ const CollectionSchema = new Schema(
   {
     itemId: { type: String, required: true },
     userId: { type: String, required: true },
+    provider: { type: String, required: true },
+    registryData: { type: Schema.Types.ObjectId, ref: "CollectibleRegistry" },
     status: {
       type: String,
       enum: ["want", "have", "completed"],
@@ -18,10 +20,10 @@ const CollectionSchema = new Schema(
   },
   {
     timestamps: true,
-  }
+  },
 );
 
 export const Collection = mongoose.model<ICollectionDocument>(
   "Collectible",
-  CollectionSchema
+  CollectionSchema,
 );

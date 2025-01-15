@@ -11,13 +11,18 @@
     "test": "echo \"No tests yet...\""
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.33.1",
+    "@atproto/api": "^0.13.27",
     "@azure/functions": "^4.0.0",
+    "@google/generative-ai": "^0.21.0",
     "azure-storage": "^2.10.7",
+    "cheerio": "^1.0.0",
     "csvtojson": "^2.0.10",
     "jsonwebtoken": "^9.0.2",
     "jwks-rsa": "^3.1.0",
     "mongoose": "^8.9.3",
-    "og-easy": "^1.0.15"
+    "og-easy": "^1.0.15",
+    "openai": "^4.78.0"
   },
   "devDependencies": {
     "@types/node": "^20.x",
