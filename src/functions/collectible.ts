@@ -36,7 +36,6 @@ async function createCollectible(
 ): Promise<HttpResponseInit> {
   try {
     const auth = await authenticateRequest(request, "write");
-    console.log(auth);
     const body: any = await request.json();
 
     const service = await CollectableService.getInstance();

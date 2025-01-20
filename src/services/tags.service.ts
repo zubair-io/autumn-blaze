@@ -44,9 +44,7 @@ export class TagService {
           },
         },
       });
-      console.log({ existingTags });
       if (existingTags && existingTags.length > 0) {
-        console.log({ existingTags });
         return existingTags;
       }
 
@@ -94,7 +92,7 @@ export class TagService {
       {
         new: true,
         runValidators: true,
-      }
+      },
     );
   }
 }

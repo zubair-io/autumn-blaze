@@ -12,7 +12,6 @@ export async function connectToDatabase(): Promise<typeof mongoose> {
     // Enable strict query and strict mode
     mongoose.set("strict", true);
     mongoose.set("strictQuery", true);
-
     const conn = await mongoose.connect(process.env.DB_CONNECTION_STRING!, {
       // Connection options
       maxPoolSize: 10,

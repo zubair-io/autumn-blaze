@@ -45,7 +45,7 @@ function textToProseMirror(text: string): ProseMirrorDoc {
   };
 }
 
-const genAI = new GoogleGenerativeAI(process.env["GEMINI"]);
+const genAI = new GoogleGenerativeAI(process.env.GEMINI);
 const model = genAI.getGenerativeModel({
   model: "gemini-2.0-flash-exp",
 });
@@ -159,32 +159,71 @@ export class CollectableRegistryService {
       },
     );
   }
-  extractLastNumber(str) {
-    const match = str.match(/\d+$/);
+  cleanTitle(str: string) {
+    const title = str
+      .replace(/Lego|#|\b\d{4,}\b|-|\s+/gi, (match) =>
+        match.match(/\s+/) ? " " : "",
+      )
+      .trim();
+
+    const titleA = title.split(" | ");
+    if (titleA.length === 3) {
+      return titleA[0];
+    }
+    return title;
+  }
+
+  extractSetNumber(str: string) {
+    const regex = /\b\d{4,}\b/;
+    const match = str.match(regex);
     return match ? match[0] : null;
   }
   async getOrCreateCollectableRegistryByUPC(
     upc: string,
   ): Promise<ICollectibleRegistryDocument | any> {
-    console.log("upc", upc);
     const registry = await CollectibleRegistry.findOne({ upc: upc });
 
     if (registry) {
       return registry;
     }
-    console.log("not found by up", upc);
     const upcResults = await fetch(
       "https://api.upcitemdb.com/prod/trial/lookup?upc=" + upc,
     );
-    console.log("upcResults", upcResults);
     const upcData = await upcResults.json();
-    const title = upcData.items[0].title.split(" - ")[1].trim();
-    const providerId = this.extractLastNumber(title) + "-1";
 
-    if (!providerId) {
+    const upcInfo = {
+      title: "",
+      providerId: "",
+      descriptionText: "",
+    };
+
+    if (upcData.items[0]) {
+      upcInfo.title = this.cleanTitle(upcData.items[0].title);
+      upcInfo.providerId =
+        (this.extractSetNumber(upcData.items[0].title) ||
+          this.extractSetNumber(upcData.items[0].description)) + "-1";
+      upcInfo.descriptionText = upcData.items[0].description;
+    }
+
+    if (!upcData.items[0] || upcInfo.providerId === "null-1") {
+      //throw new Error("No Lego found for" + upc);
+      const response = await fetch(
+        `https://api.barcodelookup.com/v3/products?barcode=${upc}&formatted=y&key=z32v3z18bav089inrfxvr80cbtd9x5`,
+      );
+      const responseJson = await response.json();
+
+      upcInfo.title = this.cleanTitle(responseJson.products[0].title);
+      upcInfo.providerId =
+        (this.extractSetNumber(responseJson.products[0].title) ||
+          this.extractSetNumber(responseJson.products[0].description)) + "-1";
+      upcInfo.descriptionText = responseJson.products[0].description;
+    }
+
+    const { title, providerId, descriptionText } = upcInfo;
+
+    if (!providerId || providerId === "null-1") {
       throw new Error("No Lego ID found");
     }
-    const descriptionText = upcData.items[0].description;
 
     const lookupById = await CollectibleRegistry.findOne({
       providerId,
@@ -209,8 +248,6 @@ export class CollectableRegistryService {
       );
       return lookupById;
     }
-
-    console.log("not found by lego id", providerId);
 
     const { proseMirror: description, text: generatedText } =
       await this.generateCollectableRegistryDescription(
@@ -313,7 +350,12 @@ export class CollectableRegistryService {
 
   async loadLegoProductPage(itemId: string) {
     itemId = itemId.split("-")[0].trim();
-    const page = await fetch("https://www.lego.com/en-us/product/" + itemId);
+    let page = await fetch("https://www.lego.com/en-us/product/" + itemId);
+    if (page.status !== 200) {
+      page = await fetch(
+        `https://www.bricklink.com/v2/catalog/catalogitem.page?S=${itemId}-1`,
+      );
+    }
     const rawText = await page.text();
     const $ = cheerio.load(rawText);
     const textArr = $("main")
@@ -326,11 +368,13 @@ export class CollectableRegistryService {
     const uniqueSet = new Set(textArr);
 
     const uniqueArray = Array.from(uniqueSet);
-    const title = $('meta[property="og:title"]')
-      .attr("content")
-      .split("|")[0]
-      .trim();
-    const description = $('meta[property="og:description"]').attr("content");
+    const title = this.cleanTitle(
+      $('meta[property="og:title"]').attr("content") || $("title").text(),
+    );
+
+    const description =
+      $('meta[property="og:description"]').attr("content") ||
+      $('meta[name="description"]').attr("content");
     const image = $('meta[property="og:image"]').attr("content");
 
     return {

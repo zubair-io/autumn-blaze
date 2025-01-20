@@ -20,11 +20,20 @@ export class CollectableService {
     userId: string,
     input: ICollectionPopulated,
   ): Promise<ICollectionPopulated | any> {
-    const collection = await Collection.create({
-      ...input,
-      userId,
-    });
-    return collection.toJSON();
+    const query = { userId, itemId: input.itemId };
+    const collection = await Collection.findOneAndUpdate(
+      query,
+      {
+        ...input,
+        userId,
+      },
+      {
+        upsert: true,
+        new: true,
+        lean: true,
+      },
+    );
+    return collection;
   }
   async deleteCollectible(userId: string, itemId: string): Promise<any> {
     const result = await Collection.deleteOne({

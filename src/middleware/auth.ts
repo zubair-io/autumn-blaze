@@ -10,7 +10,6 @@ const client = jwks({
 });
 
 function getKey(header: any, callback: any) {
-  console.log({ header });
   client.getSigningKey(header.kid, function (err, key: any) {
     const signingKey = key?.publicKey || key?.rsaPublicKey;
     callback(null, signingKey);
@@ -19,7 +18,7 @@ function getKey(header: any, callback: any) {
 
 export async function authenticateRequest(
   req: HttpRequest,
-  requiredAccess?: AccessLevel
+  requiredAccess?: AccessLevel,
 ): Promise<any> {
   return new Promise((resolve, reject) => {
     const authHeader = req.headers.get("authorization");
@@ -36,7 +35,6 @@ export async function authenticateRequest(
       issuer: `https://${process.env.AUTH0_DOMAIN}/`,
       algorithms: ["RS256"],
     };
-    console.log({ options });
     jwt.verify(token, getKey, options, (err, decoded) => {
       if (err) {
         reject(new Error("Invalid token"));
