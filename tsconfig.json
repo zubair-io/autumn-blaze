@@ -7,8 +7,5 @@
     "sourceMap": true,
     "strict": false,
     "skipLibCheck": true
-  },
-  "include": [
-    "src/**/*" // All files in src directory and subdirectories
-  ]
+  }
 }
