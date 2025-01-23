@@ -11,6 +11,7 @@ export interface CollectibleRegistry {
   createdAt?: Date; // From timestamps: true
   updatedAt?: Date; // From timestamps: true
   tags: { type: string; value: string }[];
+  bskyPostId?: string;
 }
 
 export interface ICollectibleRegistryDocument
@@ -26,6 +27,7 @@ const CollectibleRegistrySchema = new Schema(
       get: (value: string) => JSON.parse(value),
       set: (value: object) => JSON.stringify(value),
     },
+    bskyPostId: { type: String },
     images: [
       {
         type: String,

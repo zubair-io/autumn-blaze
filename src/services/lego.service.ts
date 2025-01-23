@@ -1,5 +1,5 @@
 import axios from "axios";
-import * as zlib from "zlib";
+import * as zlib from "node:zlib";
 import * as csv from "csvtojson";
 import { createBlogFromText } from "../lib/file.utils";
 

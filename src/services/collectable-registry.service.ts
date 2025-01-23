@@ -89,6 +89,10 @@ export class CollectableRegistryService {
     return collection.toJSON();
   }
 
+  async update(id: string, input: CollectibleRegistry) {
+    return await CollectibleRegistry.updateOne({ _id: id }, input);
+  }
+
   async createLegoTags(itemId: string) {
     const legos = await getLegos();
     const lego = legos.find((lego) => lego.set === itemId);
