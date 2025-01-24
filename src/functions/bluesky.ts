@@ -177,7 +177,7 @@ export async function getReplies(
 
     post.text = await bSkyService.generatePost(text);
     post.text = `${post.text}
-https://justmaple.app/product/${registry._id}`;
+https://justmaple.app/!/${registry._id}`;
     post.img = registry.images[0];
     const json = registry.toJSON();
     const postUri = await bSkyService.createPost(post.text, post.img);

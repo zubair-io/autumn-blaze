@@ -39,7 +39,7 @@ export class BSkyService {
   }
 
   async generatePost(text: string) {
-    const prompt = `generate a social media post no more than 250 characters, Include lego related hashtags, based off the following text: 
+    const prompt = `generate a social media post no more than 250 characters, the post should be fun but descriptive, Include lego related hashtags, based off the following text: 
     ${text}`;
     const result = await model.generateContent(prompt);
 
