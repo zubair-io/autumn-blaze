@@ -1,10 +1,18 @@
 import { AtpAgent, RichText } from "@atproto/api";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
 import * as Sharp from "sharp";
 
+const genAiResponseSchema = {
+  type: SchemaType.OBJECT,
+  properties: { response: { type: SchemaType.STRING } },
+};
 const genAI = new GoogleGenerativeAI(process.env.GEMINI);
 const model = genAI.getGenerativeModel({
   model: "gemini-2.0-flash-exp",
+  generationConfig: {
+    responseMimeType: "application/json",
+    responseSchema: genAiResponseSchema,
+  },
 });
 
 export class BSkyService {
@@ -43,7 +51,7 @@ export class BSkyService {
     ${text}`;
     const result = await model.generateContent(prompt);
 
-    return result.response.text().trim() + " #maple";
+    return JSON.parse(result.response.text()).response.trim() + " #maple";
   }
 
   async getReplies(uri: string) {
@@ -122,7 +130,6 @@ export class BSkyService {
           ],
         },
       });
-      console.log(postResult);
 
       postRef = postResult.uri;
     } else {
