@@ -136,6 +136,7 @@ export class CollectableRegistryService {
     return {
       tags,
       lego,
+      title: lego.title,
     };
   }
 
@@ -288,9 +289,9 @@ export class CollectableRegistryService {
     } = await this.loadLegoProductPage(itemId);
     const { proseMirror: description, text: generatedText } =
       await this.generateCollectableRegistryDescription(itemId, pageText);
-    const { tags, lego } = await this.createLegoTags(itemId);
+    const { tags, lego, title: altTitle } = await this.createLegoTags(itemId);
     return {
-      title,
+      title: title || altTitle,
       description,
       images: [`https://lego.justmaple.app/${itemId}.jpg`],
       providerId: itemId,
@@ -372,14 +373,20 @@ export class CollectableRegistryService {
     const uniqueSet = new Set(textArr);
 
     const uniqueArray = Array.from(uniqueSet);
-    const title = this.cleanTitle(
+    let title = this.cleanTitle(
       $('meta[property="og:title"]').attr("content") || $("title").text(),
     );
 
-    const description =
+    let description =
       $('meta[property="og:description"]').attr("content") ||
       $('meta[name="description"]').attr("content");
-    const image = $('meta[property="og:image"]').attr("content");
+    let image = $('meta[property="og:image"]').attr("content");
+
+    if (title.includes("Page Not Found")) {
+      title = null;
+      image = null;
+      description = null;
+    }
 
     return {
       title,
