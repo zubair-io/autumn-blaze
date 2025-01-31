@@ -6,7 +6,7 @@ export interface ITagSharing {
     {
       userId: { type: String; required: true };
       accessLevel: { type: String; enum: ["read", "write"]; required: true };
-    }
+    },
   ];
   isPublic?: boolean;
 }
@@ -15,6 +15,7 @@ export interface ITag {
   type: "folder" | "itemType" | "genre" | "custom";
   value: string;
   sharing?: ITagSharing;
+  _id: string;
 }
 
 export interface ICollection {

@@ -8,7 +8,8 @@
     "clean": "rimraf dist",
     "prestart": "npm run clean && npm run build",
     "start": "concurrently \"npm run watch\" \"func start --typescript\"",
-    "test": "echo \"No tests yet...\""
+    "test": "echo \"No tests yet...\"",
+    "fun": "func start --typescript"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.33.1",

@@ -37,6 +37,7 @@ async function createCollectible(
   try {
     const auth = await authenticateRequest(request, "write");
     const body: any = await request.json();
+    delete body._id;
 
     const service = await CollectableService.getInstance();
     const registryService = await CollectableRegistryService.getInstance();
@@ -58,6 +59,32 @@ async function createCollectible(
       status: error.status || 500,
     };
   }
+}
+
+async function patchCollectible(
+  request: HttpRequest,
+  context: InvocationContext,
+): Promise<HttpResponseInit> {
+  const auth = await authenticateRequest(request, "write");
+  const id = request.params.id;
+  const service = await CollectableService.getInstance();
+  const body: any = await request.json();
+
+  const user = await authenticateRequest(request, "read");
+
+  if (!id || !user?.sub || !body?.tags) {
+    return {
+      status: 400,
+      jsonBody: { error: "Missing required parameters", id, body, user },
+    };
+  }
+
+  const update = await service.updateCollectionTags(id, auth.sub, body.tags);
+
+  return {
+    jsonBody: update,
+    status: 200,
+  };
 }
 
 async function deleteCollectible(
@@ -90,4 +117,10 @@ app.http("deleteCollectible", {
   authLevel: "anonymous",
   route: "collectibles/{id}",
   handler: deleteCollectible,
+});
+app.http("patchCollectible", {
+  methods: ["PATCH"],
+  authLevel: "anonymous",
+  route: "collectibles/{id}",
+  handler: patchCollectible,
 });

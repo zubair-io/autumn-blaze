@@ -1,6 +1,6 @@
 import { Tag } from "../models/tag";
 
-import { AddUserToTagParams, ITag } from "../types/tag";
+import { AddUserToTagParams, ITag, ITagSharing } from "../types/tag";
 
 export class TagService {
   private static instance: TagService;
@@ -12,6 +12,40 @@ export class TagService {
       TagService.instance = new TagService();
     }
     return TagService.instance;
+  }
+
+  async updateTag(
+    id: string,
+    patch: Partial<ITag>,
+    sub: string,
+  ): Promise<ITag | null> {
+    const sanitizedPatch = {
+      ...(patch.type && { type: patch.type }),
+      ...(patch.value && { value: patch.value }),
+    };
+
+    const updatedTag = await Tag.findOneAndUpdate(
+      {
+        _id: id,
+        "sharing.sharedWith": {
+          $elemMatch: {
+            userId: sub,
+            accessLevel: "write",
+          },
+        },
+      },
+      { $set: sanitizedPatch },
+      {
+        new: true,
+        runValidators: true,
+      },
+    );
+
+    if (!updatedTag) {
+      throw new Error("Tag not found or user does not have write access");
+    }
+
+    return updatedTag;
   }
 
   async createDefaultTag(userId: string): Promise<ITag[]> {
@@ -32,6 +66,25 @@ export class TagService {
     const newTag = new Tag(defaultTag);
     const savedTag = await newTag.save();
     return [savedTag];
+  }
+  async createTag(userId: string, tag): Promise<ITag> {
+    const sharing: ITagSharing = {
+      sharedWith: [
+        {
+          userId: userId,
+          accessLevel: "write",
+        },
+      ],
+      isPublic: false,
+    };
+    const sanitizedTag: ITag = {
+      ...(tag.type && { type: tag.type }),
+      ...(tag.value && { value: tag.value }),
+      sharing,
+    };
+    const newTag = new Tag(sanitizedTag);
+    const savedTag = await newTag.save();
+    return savedTag;
   }
 
   async listUserTags(userId: string): Promise<ITag[]> {
