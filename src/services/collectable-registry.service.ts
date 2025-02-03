@@ -6,6 +6,13 @@ import {
 import * as cheerio from "cheerio";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { getLegos, LegoThemes } from "./lego.service";
+//var DOMParser = require("xmldom").DOMParser;
+import { DOMParser } from "prosemirror-model";
+import { Schema as ProseSchema } from "prosemirror-model";
+import { schema } from "prosemirror-schema-basic";
+import { addListNodes } from "prosemirror-schema-list";
+import { parseHTML } from "hostic-dom";
+
 interface ProseMirrorDoc {
   type: "doc";
   content: ProseMirrorParagraph[];
@@ -21,7 +28,43 @@ interface ProseMirrorText {
   text: string;
 }
 
-function textToProseMirror(text: string): ProseMirrorDoc {
+function textToProseMirror(html: string) {
+  // if (!html.startsWith("<")) {
+  // let n = html.split("\r\n<p><br>\r\n");
+  // n[0] = `<p>${n[0].trim()}</p>`;
+  // html = n.join("").split("\r\n").join("<p> </p>");
+
+  html = html
+    .trim()
+    .split(/\n|\r\n|<br>|<br\/>/)
+    // Trim whitespace
+    .map((str) => str.trim())
+    // Filter out empty strings
+    .filter((str) => str.length > 0)
+    // Wrap in p tags
+    .map((str) => `<p>${str}</p>`)
+    // Join back to string
+    .join("");
+
+  html = `<div>${html}</div>`;
+  //}
+  console.log(html);
+
+  const dom = parseHTML(html);
+  console.log(dom);
+
+  return DOMParser.fromSchema(schema).parse(dom).toJSON();
+}
+
+//   var parser = new DOMParser();
+//   var document = parser.parseFromString(html, "text/xml");
+//   console.log(document[0]);
+//   const ps = new Parser(schema, []);
+//   console.log(ps.parse(document));
+//   return JSON.parse(JSON.stringify(ps.parse(document)));
+// }
+
+function textToProseMirrorOld(text: string): ProseMirrorDoc {
   // Split text into paragraphs
   const paragraphs = text
     .split(/\n/)
@@ -139,30 +182,108 @@ export class CollectableRegistryService {
       title: lego.title,
     };
   }
+  async googleBookCollectableRegistryData(providerId: string) {
+    console.log(
+      `https://www.googleapis.com/books/v1/volumes/${providerId}?key=${process.env["GOOGLE_BOOKS"]}`,
+    );
+    const response = await fetch(
+      `https://www.googleapis.com/books/v1/volumes/${providerId}?key=${process.env["GOOGLE_BOOKS"]}`,
+    );
+
+    const responseJSON = await response.json();
+    const imageOrder = [
+      "extraLarge",
+      "large",
+      "medium",
+      "small",
+      "thumbnail",
+      "smallThumbnail",
+    ];
+
+    const toImageArray = (images: Record<string, string>): string[] => {
+      return [
+        imageOrder.map((key) => images[key]).filter((url) => !!url)[0],
+      ].filter((url) => !!url);
+    };
+
+    const getISBN = (
+      industryIdentifiers: Array<{ type: string; identifier: string }>,
+    ): string => {
+      let isbn10 = "";
+
+      for (const id of industryIdentifiers) {
+        if (id.type === "ISBN_13") return id.identifier;
+        if (id.type === "ISBN_10") isbn10 = id.identifier;
+      }
+
+      return isbn10 || "";
+    };
+
+    const title = responseJSON.volumeInfo.title;
+    const description = textToProseMirror(responseJSON.volumeInfo.description);
+    const images = toImageArray(responseJSON.volumeInfo.imageLinks);
+    const providerData = responseJSON;
+    const upc = getISBN(responseJSON.volumeInfo.industryIdentifiers);
+
+    const tags = [
+      {
+        type: "system",
+        label:
+          "Author" + (responseJSON.volumeInfo.authors.length > 1 ? "s" : ""),
+        value: responseJSON.volumeInfo.authors.join(" | "),
+      },
+      {
+        type: "system",
+        label: "Pages",
+        value: responseJSON.volumeInfo.pageCount,
+      },
+      {
+        type: "system",
+        label: "Publisher",
+        value: responseJSON.volumeInfo.publisher,
+      },
+      {
+        type: "system",
+        label: "Publish Date",
+        value: responseJSON.volumeInfo.publishedDate,
+      },
+    ];
+
+    return { title, description, images, providerData, tags, upc };
+  }
+
+  async createCollectableRegistryData(provider, providerId) {
+    if (provider === "lego") {
+      return await this.legoCollectableRegistry(providerId);
+    }
+    if (provider === "book") {
+      return await this.googleBookCollectableRegistryData(providerId);
+    }
+    throw new Error("Unknown Provider");
+  }
 
   async getOrCreateCollectableRegistry(
     providerId: string,
     provider: string,
   ): Promise<ICollectibleRegistryDocument | any> {
-    return this.getCollectableRegistry(providerId, provider).then(
-      async (registry) => {
-        if (registry) {
-          return registry;
-        }
+    const registry = await this.getCollectableRegistry(providerId, provider);
+    if (registry) {
+      return registry;
+    }
 
-        const { title, description, images, providerData, tags } =
-          await this.legoCollectableRegistry(providerId);
-        return this.createCollectableRegistry({
-          providerId,
-          provider,
-          title,
-          description,
-          images,
-          providerData,
-          tags,
-        });
-      },
-    );
+    const { title, description, images, providerData, tags, upc } =
+      await this.createCollectableRegistryData(provider, providerId);
+
+    return await this.createCollectableRegistry({
+      providerId,
+      provider,
+      title,
+      description,
+      images,
+      providerData,
+      tags,
+      upc,
+    });
   }
   cleanTitle(str: string) {
     const title = str
@@ -291,6 +412,7 @@ export class CollectableRegistryService {
       await this.generateCollectableRegistryDescription(itemId, pageText);
     const { tags, lego, title: altTitle } = await this.createLegoTags(itemId);
     return {
+      upc: "",
       title: title || altTitle,
       description,
       images: [`https://lego.justmaple.app/${itemId}.jpg`],

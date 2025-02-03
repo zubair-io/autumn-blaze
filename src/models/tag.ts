@@ -10,6 +10,7 @@ const TagSchema = new Schema(
       enum: ["folder", "itemType", "genre", "custom", "system"],
       required: true,
     },
+    label: { type: String, required: false },
     value: { type: String, required: true },
     sharing: {
       sharedWith: [

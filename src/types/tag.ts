@@ -9,6 +9,7 @@ export interface ITagSharing {
 export interface ITag {
   type: "folder" | "itemType" | "genre" | "custom";
   value: string;
+  label?: string;
   sharing: ITagSharing;
 }
 
