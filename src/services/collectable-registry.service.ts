@@ -190,7 +190,12 @@ export class CollectableRegistryService {
       `https://www.googleapis.com/books/v1/volumes/${providerId}?key=${process.env["GOOGLE_BOOKS"]}`,
     );
 
-    const responseJSON = await response.json();
+    const json = await response.json();
+
+    return this.handleGoogleBookData(json);
+  }
+
+  handleGoogleBookData(json: any) {
     const imageOrder = [
       "extraLarge",
       "large",
@@ -219,37 +224,37 @@ export class CollectableRegistryService {
       return isbn10 || "";
     };
 
-    const title = responseJSON.volumeInfo.title;
-    const description = textToProseMirror(responseJSON.volumeInfo.description);
-    const images = toImageArray(responseJSON.volumeInfo.imageLinks);
-    const providerData = responseJSON;
-    const upc = getISBN(responseJSON.volumeInfo.industryIdentifiers);
+    const title = json.volumeInfo.title;
+    const description = textToProseMirror(json.volumeInfo.description);
+    const images = toImageArray(json.volumeInfo.imageLinks);
+    const providerData = json;
+    const upc = getISBN(json.volumeInfo.industryIdentifiers);
+    const providerId = json.id;
 
     const tags = [
       {
         type: "system",
-        label:
-          "Author" + (responseJSON.volumeInfo.authors.length > 1 ? "s" : ""),
-        value: responseJSON.volumeInfo.authors.join(" | "),
+        label: "Author" + (json.volumeInfo.authors.length > 1 ? "s" : ""),
+        value: json.volumeInfo.authors.join(" | "),
       },
       {
         type: "system",
         label: "Pages",
-        value: responseJSON.volumeInfo.pageCount,
+        value: json.volumeInfo.pageCount,
       },
       {
         type: "system",
         label: "Publisher",
-        value: responseJSON.volumeInfo.publisher,
+        value: json.volumeInfo.publisher,
       },
       {
         type: "system",
         label: "Publish Date",
-        value: responseJSON.volumeInfo.publishedDate,
+        value: json.volumeInfo.publishedDate,
       },
     ];
 
-    return { title, description, images, providerData, tags, upc };
+    return { title, description, images, providerData, tags, upc, providerId };
   }
 
   async createCollectableRegistryData(provider, providerId) {
@@ -304,14 +309,53 @@ export class CollectableRegistryService {
     const match = str.match(regex);
     return match ? match[0] : null;
   }
-  async getOrCreateCollectableRegistryByUPC(
-    upc: string,
-  ): Promise<ICollectibleRegistryDocument | any> {
+  async getOrCreateCollectableRegistryByUPC(upc: string) {
     const registry = await CollectibleRegistry.findOne({ upc: upc });
 
     if (registry) {
       return registry;
     }
+
+    const book = await this.createBookCollectableRegistryByUPC(upc);
+    if (book) {
+      const provider = "book";
+      const { providerId, title, description, images, providerData, tags } =
+        book;
+      return await this.createCollectableRegistry({
+        providerId,
+        provider,
+        title,
+        description,
+        images,
+        providerData,
+        tags,
+        upc,
+      });
+    }
+
+    return await this.createLegoCollectableRegistryByUPC(upc);
+  }
+
+  async createBookCollectableRegistryByUPC(upc: string) {
+    const url = new URL("https://www.googleapis.com/books/v1/volumes/");
+
+    // Add query parameters
+    const params = url.searchParams;
+    params.append("q", `isbn:${upc}`);
+    params.append("key", process.env["GOOGLE_BOOKS"]);
+
+    url.toString();
+
+    const response = await fetch(url.toString());
+    const json = await response.json();
+    if (!json.totalItems) {
+      return null;
+    }
+    return this.handleGoogleBookData(json.items[0]);
+  }
+  async createLegoCollectableRegistryByUPC(
+    upc: string,
+  ): Promise<ICollectibleRegistryDocument | any> {
     const upcResults = await fetch(
       "https://api.upcitemdb.com/prod/trial/lookup?upc=" + upc,
     );
@@ -334,7 +378,7 @@ export class CollectableRegistryService {
     if (!upcData.items[0] || upcInfo.providerId === "null-1") {
       //throw new Error("No Lego found for" + upc);
       const response = await fetch(
-        `https://api.barcodelookup.com/v3/products?barcode=${upc}&formatted=y&key=z32v3z18bav089inrfxvr80cbtd9x5`,
+        `https://api.bcodelookup.com/v3/products?barcode=${upc}&formatted=y&key=z32v3z18bav089inrfxvr80cbtd9x5`,
       );
       const responseJson = await response.json();
 
