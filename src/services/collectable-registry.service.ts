@@ -378,7 +378,7 @@ export class CollectableRegistryService {
     if (!upcData.items[0] || upcInfo.providerId === "null-1") {
       //throw new Error("No Lego found for" + upc);
       const response = await fetch(
-        `https://api.bcodelookup.com/v3/products?barcode=${upc}&formatted=y&key=z32v3z18bav089inrfxvr80cbtd9x5`,
+        `https://api.barcodelookup.com/v3/products?barcode=${upc}&formatted=y&key=z32v3z18bav089inrfxvr80cbtd9x5`,
       );
       const responseJson = await response.json();
 

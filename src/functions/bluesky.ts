@@ -175,12 +175,12 @@ export async function getReplies(
     ${registry.description}
       `;
 
-    post.text = await bSkyService.generatePost(text);
+    post.text = await bSkyService.generatePost(text, registry.provider);
     post.text = `${post.text}
 https://justmaple.app/!/${registry._id}`;
     post.img = registry.images[0];
     const json = registry.toJSON();
-    const postUri = await bSkyService.createPost(post.text, post.img);
+    const postUri: string = await bSkyService.createPost(post.text, post.img);
     await collectableRegistryService.update(json._id, {
       ...json,
       bskyPostId: postUri,

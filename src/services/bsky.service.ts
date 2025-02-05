@@ -46,12 +46,17 @@ export class BSkyService {
     }
   }
 
-  async generatePost(text: string) {
-    const prompt = `generate a social media post no more than 250 characters, the post should be fun but descriptive, Include lego related hashtags, you are to summarize the following text: 
+  async generatePost(text: string, provider: string) {
+    const legoPrompt = `generate a social media post no more than 250 characters, the post should be fun but descriptive, Include lego related hashtags, you are to summarize the following text: 
   """  ${text} """
   
   Do not talk about building the set, and adding it to your collection. You can talk about its features. 
   `;
+    const bookPrompt = `generate a social media post no more than 250 characters, the post should be fun but descriptive, Include book themed hashtags about the following book: 
+    """  ${text} """
+    no instagram or tiktok related hashtags
+  `;
+    const prompt = provider === "lego" ? legoPrompt : bookPrompt;
 
     const result = await model.generateContent(prompt);
 
