@@ -58,6 +58,7 @@ const CollectibleRegistrySchema = new Schema(
           required: true,
         },
         value: { type: String, required: true },
+        label: { type: String, required: false },
       },
     ],
     providerData: {
