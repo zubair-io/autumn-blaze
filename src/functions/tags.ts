@@ -75,14 +75,8 @@ export async function updateTag(
       jsonBody: updatedTag,
     };
   } catch (error) {
-    const status =
-      error.message.includes("not found") ||
-      error.message.includes("write access")
-        ? 403
-        : 500;
-
     return {
-      status,
+      status: error.status || 500,
       jsonBody: { error: error.message },
     };
   }

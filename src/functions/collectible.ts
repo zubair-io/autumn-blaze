@@ -65,7 +65,6 @@ async function patchCollectible(
   request: HttpRequest,
   context: InvocationContext,
 ): Promise<HttpResponseInit> {
-  const auth = await authenticateRequest(request, "write");
   const id = request.params.id;
   const service = await CollectableService.getInstance();
   const body: any = await request.json();
@@ -79,7 +78,7 @@ async function patchCollectible(
     };
   }
 
-  const update = await service.updateCollectionTags(id, auth.sub, body.tags);
+  const update = await service.updateCollectionTags(id, user.sub, body.tags);
 
   return {
     jsonBody: update,

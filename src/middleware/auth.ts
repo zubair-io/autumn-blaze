@@ -2,6 +2,12 @@
 import { HttpRequest } from "@azure/functions";
 import * as jwt from "jsonwebtoken";
 import * as jwks from "jwks-rsa";
+class HttpError extends Error {
+  constructor(message: string, public status: number) {
+    super(message);
+    this.name = "HttpError";
+  }
+}
 
 export type AccessLevel = "read" | "write" | "admin";
 
@@ -37,7 +43,7 @@ export async function authenticateRequest(
     };
     jwt.verify(token, getKey, options, (err, decoded) => {
       if (err) {
-        reject(new Error("Invalid token"));
+        reject(new HttpError("Invalid token", 401)); // 401 Unauthorized
         return;
       }
 

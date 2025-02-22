@@ -116,16 +116,12 @@ export class TagService {
     // Verify requesting user has write access to the tag
     const tag = await Tag.findOne({
       _id: tagId,
-      $or: [
-        {
-          "sharing.sharedWith": {
-            $elemMatch: {
-              userId: requestingUserId,
-              accessLevel: "write",
-            },
-          },
+      "sharing.sharedWith": {
+        $elemMatch: {
+          userId: requestingUserId,
+          accessLevel: "write",
         },
-      ],
+      },
     });
 
     if (!tag) {
