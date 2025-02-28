@@ -24,7 +24,6 @@ const TagSchema = new Schema(
           },
         },
       ],
-      isPublic: { type: Boolean, default: false },
       _id: false,
     },
   },

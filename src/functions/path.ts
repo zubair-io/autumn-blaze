@@ -47,6 +47,29 @@ async function addPaths(
     const service = await PathService.getInstance();
     const savedPaths = await service.add(pathData, user);
 
+    const notificationPayload = {
+      action: "newPath",
+      data: {
+        ...savedPaths,
+      },
+    };
+
+    // Extract unique recipient IDs and create messages in one pass
+    const messages = [
+      ...new Set(
+        savedPaths.tags.flatMap((tag) =>
+          (tag.sharing?.sharedWith || []).map((info) => info.userId),
+        ),
+      ),
+    ].map((userId) => ({
+      target: "newMessage",
+      arguments: [notificationPayload],
+      userId,
+    }));
+
+    console.log(`Sending notifications to ${messages.length} recipients`);
+    context.extraOutputs.set("signalRMessages", messages);
+
     return {
       status: 201,
       jsonBody: savedPaths,
@@ -77,7 +100,36 @@ async function deletePath(
     }
 
     const service = await PathService.getInstance();
+
+    const path = await service.getById(pathId, user);
+    if (!path) {
+      throw "No Path";
+    }
     await service.deletePath(pathId, user);
+
+    const notificationPayload = {
+      action: "deletePath",
+      data: pathId,
+    };
+
+    // Extract unique recipient IDs and create messages in one pass
+    const messages = [
+      ...new Set(
+        path.tags.flatMap((tag) =>
+          (tag.sharing?.sharedWith || []).map((info) => info.userId),
+        ),
+      ),
+    ].map((userId) => ({
+      target: "newMessage",
+      arguments: [notificationPayload],
+      userId,
+    }));
+
+    console.log(
+      `Sending notifications to ${messages.length} recipients`,
+      JSON.stringify(messages),
+    );
+    context.extraOutputs.set("signalRMessages", messages);
 
     return {
       status: 204,
@@ -103,6 +155,14 @@ app.http("addPaths", {
   authLevel: "anonymous",
   handler: addPaths,
   route: "paths",
+  extraOutputs: [
+    {
+      type: "signalR",
+      name: "signalRMessages",
+      hubName: "paths",
+      connectionStringSetting: "AzureSignalRConnectionString",
+    },
+  ],
 });
 
 app.http("deletePath", {
@@ -110,4 +170,12 @@ app.http("deletePath", {
   authLevel: "anonymous",
   handler: deletePath,
   route: "paths/{pathId}",
+  extraOutputs: [
+    {
+      type: "signalR",
+      name: "signalRMessages",
+      hubName: "paths",
+      connectionStringSetting: "AzureSignalRConnectionString",
+    },
+  ],
 });
