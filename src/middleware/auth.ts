@@ -2,12 +2,7 @@
 import { HttpRequest } from "@azure/functions";
 import * as jwt from "jsonwebtoken";
 import * as jwks from "jwks-rsa";
-class HttpError extends Error {
-  constructor(message: string, public status: number) {
-    super(message);
-    this.name = "HttpError";
-  }
-}
+import { HttpError } from "../utils/error";
 
 export type AccessLevel = "read" | "write" | "admin";
 

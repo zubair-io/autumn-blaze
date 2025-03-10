@@ -7,7 +7,7 @@ const TagSchema = new Schema(
   {
     type: {
       type: String,
-      enum: ["folder", "itemType", "genre", "custom", "system"],
+      enum: ["folder", "itemType", "genre", "custom", "system", "canvas"],
       required: true,
     },
     label: { type: String, required: false },
