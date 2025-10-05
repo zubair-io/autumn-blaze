@@ -36,7 +36,6 @@ async function getAllLegoCollectableRegistry(
   const jsonBody = await service.getCollectableRegistryByProviderId(
     itemProvider,
   );
-  delete jsonBody.providerData;
 
   return {
     jsonBody,
