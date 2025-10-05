@@ -136,6 +136,10 @@ export class CollectableRegistryService {
     return await CollectibleRegistry.updateOne({ _id: id }, input);
   }
 
+  async getCollectableRegistryByProviderId(providerId: string) {
+    return await CollectibleRegistry.findOne({ providerId });
+  }
+
   async createLegoTags(itemId: string) {
     const legos = await getLegos();
     const lego = legos.find((lego) => lego.set === itemId);

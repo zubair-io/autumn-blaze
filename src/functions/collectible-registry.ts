@@ -5,7 +5,6 @@ import {
   InvocationContext,
 } from "@azure/functions";
 import { CollectableRegistryService } from "../services/collectable-registry.service";
-import { authenticateRequest } from "../middleware/auth";
 
 async function getLegoCollectableRegistry(
   request: HttpRequest,
@@ -17,6 +16,24 @@ async function getLegoCollectableRegistry(
 
   const jsonBody = await service.getOrCreateCollectableRegistry(
     itemId,
+    itemProvider,
+  );
+  delete jsonBody.providerData;
+
+  return {
+    jsonBody,
+    status: 200,
+  };
+}
+
+async function getAllLegoCollectableRegistry(
+  request: HttpRequest,
+  context: InvocationContext,
+) {
+  const itemProvider = "lego";
+  const service = await CollectableRegistryService.getInstance();
+
+  const jsonBody = await service.getCollectableRegistryByProviderId(
     itemProvider,
   );
   delete jsonBody.providerData;
@@ -64,6 +81,13 @@ app.http("lego-collectible", {
   authLevel: "anonymous",
   route: "collectible-registry/{id}",
   handler: getCollectableRegistry,
+});
+
+app.http("get-lego-collectible", {
+  methods: ["GET"],
+  authLevel: "anonymous",
+  route: "collectible-registry",
+  handler: getAllLegoCollectableRegistry,
 });
 
 app.http("lego-collectible-registry-by-upc", {
