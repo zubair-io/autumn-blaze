@@ -25,7 +25,7 @@ async function getPrompts(
         { userId: SYSTEM_USER_ID }, // System default prompts
         { userId: userId }           // User's custom prompts
       ]
-    }).sort({ createdAt: -1 });
+    });
 
     context.log(`Found ${prompts.length} prompts for user ${userId} (including system prompts)`);
     context.log(`System user ID: ${SYSTEM_USER_ID}`);
