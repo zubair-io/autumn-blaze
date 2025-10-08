@@ -34,7 +34,7 @@ async function processRecording(
     // Use Auth0 sub as userId directly
     const userId = auth.sub;
 
-    // Find matching prompt
+    // Find matching prompt in database
     let matchedPrompt;
     if (triggerWord) {
       matchedPrompt = await CustomPrompt.findOne({
@@ -42,6 +42,16 @@ async function processRecording(
         triggerWord: triggerWord.toLowerCase(),
         isActive: true,
       });
+
+      // If not found in database, check built-in prompts
+      if (!matchedPrompt) {
+        const builtInPrompt = BUILT_IN_PROMPTS.find(
+          (p) => p.triggerWord === triggerWord.toLowerCase()
+        );
+        if (builtInPrompt) {
+          matchedPrompt = builtInPrompt as any;
+        }
+      }
     }
 
     let processedOutput = transcript;
