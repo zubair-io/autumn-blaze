@@ -37,16 +37,19 @@ async function processRecording(
     // Find matching prompt in database
     let matchedPrompt;
     if (triggerWord) {
+      // Strip punctuation from trigger word
+      const cleanTriggerWord = triggerWord.toLowerCase().replace(/[.,!?;:]+$/g, '');
+
       matchedPrompt = await CustomPrompt.findOne({
         userId: userId,
-        triggerWord: triggerWord.toLowerCase(),
+        triggerWord: cleanTriggerWord,
         isActive: true,
       });
 
       // If not found in database, check built-in prompts
       if (!matchedPrompt) {
         const builtInPrompt = BUILT_IN_PROMPTS.find(
-          (p) => p.triggerWord === triggerWord.toLowerCase()
+          (p) => p.triggerWord === cleanTriggerWord
         );
         if (builtInPrompt) {
           matchedPrompt = builtInPrompt as any;
@@ -62,9 +65,9 @@ async function processRecording(
 
     // Process with Claude if we have a prompt
     if (matchedPrompt) {
-      // Remove trigger word from transcript
+      // Remove trigger word from transcript (strip punctuation first)
       const cleanTranscript = triggerWord
-        ? transcript.replace(new RegExp(`^${triggerWord}\\s*`, "i"), "")
+        ? transcript.replace(new RegExp(`^${triggerWord.replace(/[.,!?;:]+$/g, '')}[.,!?;:]*\\s*`, "i"), "")
         : transcript;
 
       const message = await anthropic.messages.create({
