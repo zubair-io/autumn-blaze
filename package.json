@@ -26,6 +26,7 @@
     "@ipld/dag-cbor": "9.2.2",
     "@skyware/firehose": "^0.3.2",
     "@skyware/jetstream": "^0.2.2",
+    "apple-signin-auth": "^2.0.0",
     "azure-storage": "^2.10.7",
     "cbor-x": "^1.6.0",
     "cheerio": "^1.0.0",

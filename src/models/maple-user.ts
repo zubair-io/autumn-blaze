@@ -8,6 +8,8 @@ export interface IMapleUser extends Document {
     autoDeleteAudioAfterDays?: number;
     preferredLanguage: string;
   };
+  isActive: boolean;
+  revokedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -41,6 +43,15 @@ const MapleUserSchema = new Schema<IMapleUser>(
         type: String,
         default: 'en',
       },
+    },
+    isActive: {
+      type: Boolean,
+      default: true,
+      index: true,
+    },
+    revokedAt: {
+      type: Date,
+      default: null,
     },
   },
   {

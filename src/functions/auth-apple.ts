@@ -5,6 +5,7 @@ import {
   InvocationContext,
 } from "@azure/functions";
 import * as jwt from "jsonwebtoken";
+import appleSignin from "apple-signin-auth";
 import { MapleUser } from "../models/maple-user";
 import { CustomPrompt, BUILT_IN_PROMPTS } from "../models/custom-prompt";
 
@@ -34,19 +35,21 @@ async function appleSignIn(
       };
     }
 
-    // Decode the identity token (in production, you should verify the signature)
-    // For now, we'll just decode it without verification
-    const decoded = jwt.decode(identityToken) as AppleIdTokenPayload;
-
-    if (!decoded || !decoded.sub) {
+    // Verify the identity token with Apple
+    let decoded: AppleIdTokenPayload;
+    try {
+      const appleResponse = await appleSignin.verifyIdToken(identityToken, {
+        audience: process.env.APPLE_CLIENT_ID!,
+        ignoreExpiration: false,
+      });
+      decoded = appleResponse as AppleIdTokenPayload;
+    } catch (error) {
+      context.error('Failed to verify Apple ID token:', error);
       return {
         jsonBody: { error: 'Invalid identity token' },
         status: 401,
       };
     }
-
-    // TODO: In production, verify the token signature with Apple's public keys
-    // https://appleid.apple.com/auth/keys
 
     const appleUserId = decoded.sub;
     const email = decoded.email || user?.email;
