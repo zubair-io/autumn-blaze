@@ -2,7 +2,7 @@ import mongoose, { Schema, Document } from 'mongoose';
 
 export interface IRecording extends Document {
   recordingId: string;
-  userId: mongoose.Types.ObjectId;
+  userId: string; // Auth0 sub (user ID)
   transcript: string;
   processedOutput: string;
   promptUsed: {
@@ -27,8 +27,7 @@ const RecordingSchema = new Schema<IRecording>(
       index: true,
     },
     userId: {
-      type: Schema.Types.ObjectId,
-      ref: 'MapleUser',
+      type: String, // Auth0 sub
       required: true,
       index: true,
     },

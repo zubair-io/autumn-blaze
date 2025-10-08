@@ -7,7 +7,6 @@ import {
 import { BlobServiceClient } from "@azure/storage-blob";
 import { authenticateRequest } from "../middleware/auth";
 import { Recording } from "../models/recording";
-import { MapleUser } from "../models/maple-user";
 
 const blobServiceClient = BlobServiceClient.fromConnectionString(
   process.env.AZURE_STORAGE_CONNECTION_STRING!
@@ -22,14 +21,7 @@ async function uploadAudio(
   try {
     const auth = await authenticateRequest(request, "write");
 
-    // Get user
-    const user = await MapleUser.findOne({ appleUserId: auth.sub });
-    if (!user) {
-      return {
-        jsonBody: { error: 'User not found' },
-        status: 404,
-      };
-    }
+    const userId = auth.sub;
 
     // Parse multipart form data
     const formData = await request.formData();
@@ -47,7 +39,7 @@ async function uploadAudio(
     // Verify recording belongs to user
     const recording = await Recording.findOne({
       recordingId,
-      userId: user._id,
+      userId: userId,
     });
 
     if (!recording) {
@@ -58,7 +50,7 @@ async function uploadAudio(
     }
 
     // Upload to Azure Blob Storage
-    const blobName = `${user._id}/${recordingId}.m4a`;
+    const blobName = `${userId}/${recordingId}.m4a`;
     const containerClient = blobServiceClient.getContainerClient(containerName);
     const blockBlobClient = containerClient.getBlockBlobClient(blobName);
 

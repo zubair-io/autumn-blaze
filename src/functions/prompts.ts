@@ -6,7 +6,6 @@ import {
 } from "@azure/functions";
 import { authenticateRequest } from "../middleware/auth";
 import { CustomPrompt, BUILT_IN_PROMPTS } from "../models/custom-prompt";
-import { MapleUser } from "../models/maple-user";
 
 // Get all prompts for user
 async function getPrompts(
@@ -16,15 +15,9 @@ async function getPrompts(
   try {
     const auth = await authenticateRequest(request, "read");
 
-    const user = await MapleUser.findOne({ appleUserId: auth.sub });
-    if (!user) {
-      return {
-        jsonBody: { error: 'User not found' },
-        status: 404,
-      };
-    }
+    const userId = auth.sub;
 
-    const prompts = await CustomPrompt.find({ userId: user._id }).sort({ createdAt: -1 });
+    const prompts = await CustomPrompt.find({ userId: userId }).sort({ createdAt: -1 });
 
     return {
       jsonBody: { prompts },
@@ -57,17 +50,11 @@ async function createPrompt(
       };
     }
 
-    const user = await MapleUser.findOne({ appleUserId: auth.sub });
-    if (!user) {
-      return {
-        jsonBody: { error: 'User not found' },
-        status: 404,
-      };
-    }
+    const userId = auth.sub;
 
     // Check if trigger word already exists for this user
     const existing = await CustomPrompt.findOne({
-      userId: user._id,
+      userId: userId,
       triggerWord: triggerWord.toLowerCase(),
     });
 
@@ -79,7 +66,7 @@ async function createPrompt(
     }
 
     const prompt = new CustomPrompt({
-      userId: user._id,
+      userId: userId,
       triggerWord: triggerWord.toLowerCase(),
       promptText,
       icon: icon || 'mic',
@@ -113,17 +100,11 @@ async function updatePrompt(
     const promptId = request.params.id;
     const body: any = await request.json();
 
-    const user = await MapleUser.findOne({ appleUserId: auth.sub });
-    if (!user) {
-      return {
-        jsonBody: { error: 'User not found' },
-        status: 404,
-      };
-    }
+    const userId = auth.sub;
 
     const prompt = await CustomPrompt.findOne({
       _id: promptId,
-      userId: user._id,
+      userId: userId,
     });
 
     if (!prompt) {
@@ -145,7 +126,7 @@ async function updatePrompt(
     if (body.triggerWord !== undefined) {
       // Check if new trigger word conflicts
       const existing = await CustomPrompt.findOne({
-        userId: user._id,
+        userId: userId,
         triggerWord: body.triggerWord.toLowerCase(),
         _id: { $ne: promptId },
       });
@@ -189,17 +170,11 @@ async function deletePrompt(
     const auth = await authenticateRequest(request, "write");
     const promptId = request.params.id;
 
-    const user = await MapleUser.findOne({ appleUserId: auth.sub });
-    if (!user) {
-      return {
-        jsonBody: { error: 'User not found' },
-        status: 404,
-      };
-    }
+    const userId = auth.sub;
 
     const prompt = await CustomPrompt.findOne({
       _id: promptId,
-      userId: user._id,
+      userId: userId,
     });
 
     if (!prompt) {
@@ -240,26 +215,20 @@ async function initializeBuiltInPrompts(
   try {
     const auth = await authenticateRequest(request, "write");
 
-    const user = await MapleUser.findOne({ appleUserId: auth.sub });
-    if (!user) {
-      return {
-        jsonBody: { error: 'User not found' },
-        status: 404,
-      };
-    }
+    const userId = auth.sub;
 
     const createdPrompts = [];
 
     for (const builtInPrompt of BUILT_IN_PROMPTS) {
       // Check if already exists
       const existing = await CustomPrompt.findOne({
-        userId: user._id,
+        userId: userId,
         triggerWord: builtInPrompt.triggerWord,
       });
 
       if (!existing) {
         const prompt = new CustomPrompt({
-          userId: user._id,
+          userId: userId,
           ...builtInPrompt,
         });
         await prompt.save();

@@ -7,7 +7,6 @@ import {
 import { BlobServiceClient } from "@azure/storage-blob";
 import { authenticateRequest } from "../middleware/auth";
 import { Recording } from "../models/recording";
-import { MapleUser } from "../models/maple-user";
 
 const blobServiceClient = BlobServiceClient.fromConnectionString(
   process.env.AZURE_STORAGE_CONNECTION_STRING!
@@ -22,20 +21,14 @@ async function getRecordings(
   try {
     const auth = await authenticateRequest(request, "read");
 
-    const user = await MapleUser.findOne({ appleUserId: auth.sub });
-    if (!user) {
-      return {
-        jsonBody: { error: 'User not found' },
-        status: 404,
-      };
-    }
+    const userId = auth.sub;
 
     // Pagination parameters
     const limit = parseInt(request.query.get('limit') || '50', 10);
     const offset = parseInt(request.query.get('offset') || '0', 10);
     const search = request.query.get('search');
 
-    let query: any = { userId: user._id };
+    let query: any = { userId: userId };
 
     // Text search if provided
     if (search) {
@@ -80,17 +73,11 @@ async function getRecordingById(
     const auth = await authenticateRequest(request, "read");
     const recordingId = request.params.id;
 
-    const user = await MapleUser.findOne({ appleUserId: auth.sub });
-    if (!user) {
-      return {
-        jsonBody: { error: 'User not found' },
-        status: 404,
-      };
-    }
+    const userId = auth.sub;
 
     const recording = await Recording.findOne({
       recordingId,
-      userId: user._id,
+      userId: userId,
     }).select('-__v');
 
     if (!recording) {
@@ -122,17 +109,11 @@ async function deleteRecording(
     const auth = await authenticateRequest(request, "write");
     const recordingId = request.params.id;
 
-    const user = await MapleUser.findOne({ appleUserId: auth.sub });
-    if (!user) {
-      return {
-        jsonBody: { error: 'User not found' },
-        status: 404,
-      };
-    }
+    const userId = auth.sub;
 
     const recording = await Recording.findOne({
       recordingId,
-      userId: user._id,
+      userId: userId,
     });
 
     if (!recording) {
@@ -145,7 +126,7 @@ async function deleteRecording(
     // Delete audio from blob storage if it exists
     if (recording.audioUrl) {
       try {
-        const blobName = `${user._id}/${recordingId}.m4a`;
+        const blobName = `${userId}/${recordingId}.m4a`;
         const containerClient = blobServiceClient.getContainerClient(containerName);
         const blockBlobClient = containerClient.getBlockBlobClient(blobName);
         await blockBlobClient.deleteIfExists();
@@ -178,16 +159,10 @@ async function getPendingSyncRecordings(
   try {
     const auth = await authenticateRequest(request, "read");
 
-    const user = await MapleUser.findOne({ appleUserId: auth.sub });
-    if (!user) {
-      return {
-        jsonBody: { error: 'User not found' },
-        status: 404,
-      };
-    }
+    const userId = auth.sub;
 
     const recordings = await Recording.find({
-      userId: user._id,
+      userId: userId,
       audioSyncStatus: 'pending',
     })
       .sort({ timestamp: 1 }) // Oldest first

@@ -1,7 +1,7 @@
 import mongoose, { Schema, Document } from 'mongoose';
 
 export interface ICustomPrompt extends Document {
-  userId: mongoose.Types.ObjectId;
+  userId: string; // Auth0 sub
   triggerWord: string;
   promptText: string;
   icon: string;
@@ -15,8 +15,7 @@ export interface ICustomPrompt extends Document {
 const CustomPromptSchema = new Schema<ICustomPrompt>(
   {
     userId: {
-      type: Schema.Types.ObjectId,
-      ref: 'MapleUser',
+      type: String, // Auth0 sub
       required: true,
       index: true,
     },
