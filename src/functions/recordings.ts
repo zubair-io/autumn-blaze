@@ -8,6 +8,8 @@ import { BlobServiceClient } from "@azure/storage-blob";
 import { authenticateRequest } from "../middleware/auth";
 import { Recording } from "../models/recording";
 
+const SYSTEM_USER_ID = "11577eca-11f1-453f-81b3-d0bb46a995e3";
+
 const blobServiceClient = BlobServiceClient.fromConnectionString(
   process.env.AZURE_STORAGE_CONNECTION_STRING!
 );
@@ -202,9 +204,127 @@ app.http("deleteRecording", {
   handler: deleteRecording,
 });
 
+// Reprocess recording with different prompt
+async function reprocessRecording(
+  request: HttpRequest,
+  context: InvocationContext,
+): Promise<HttpResponseInit> {
+  try {
+    const auth = await authenticateRequest(request, "write");
+    const recordingId = request.params.id;
+    const body: any = await request.json();
+
+    const { triggerWord } = body;
+
+    if (!triggerWord) {
+      return {
+        jsonBody: { error: "Missing triggerWord" },
+        status: 400,
+      };
+    }
+
+    const userId = auth.sub;
+
+    // Get the recording
+    const recording = await Recording.findOne({
+      recordingId,
+      userId: userId,
+    });
+
+    if (!recording) {
+      return {
+        jsonBody: { error: "Recording not found" },
+        status: 404,
+      };
+    }
+
+    // Import CustomPrompt and Anthropic
+    const { CustomPrompt } = await import("../models/custom-prompt");
+    const Anthropic = (await import("@anthropic-ai/sdk")).default;
+
+    const anthropic = new Anthropic({
+      apiKey: process.env.ANTHROPIC_API_KEY,
+    });
+
+    // Find the prompt (check both system and user prompts)
+    const cleanTriggerWord = triggerWord.toLowerCase().replace(/[.,!?;:]+$/g, "");
+
+    const matchedPrompt = await CustomPrompt.findOne({
+      $or: [
+        { userId: SYSTEM_USER_ID },
+        { userId: userId }
+      ],
+      triggerWord: cleanTriggerWord,
+      isActive: true,
+    });
+
+    if (!matchedPrompt) {
+      return {
+        jsonBody: { error: "Prompt not found" },
+        status: 404,
+      };
+    }
+
+    // Remove trigger word from transcript
+    const cleanTranscript = recording.transcript.replace(
+      new RegExp(`^${cleanTriggerWord}[.,!?;:]*\\s*`, "i"),
+      ""
+    );
+
+    // Process with Claude
+    const message = await anthropic.messages.create({
+      model: "claude-sonnet-4-5-20250929",
+      max_tokens: 4096,
+      temperature: 0.7,
+      messages: [
+        {
+          role: "user",
+          content: `${matchedPrompt.promptText}\n\nTranscript:\n${cleanTranscript}`,
+        },
+      ],
+    });
+
+    const textContent = message.content.find((block) => block.type === "text");
+    let processedOutput = recording.transcript;
+    if (textContent && textContent.type === "text") {
+      processedOutput = textContent.text;
+    }
+
+    // Update the recording
+    recording.processedOutput = processedOutput;
+    recording.promptUsed = {
+      triggerWord: matchedPrompt.triggerWord,
+      promptText: matchedPrompt.promptText,
+    };
+    await recording.save();
+
+    return {
+      jsonBody: {
+        recordingId,
+        processedOutput,
+        promptUsed: recording.promptUsed,
+      },
+      status: 200,
+    };
+  } catch (error) {
+    context.error("Error reprocessing recording:", error);
+    return {
+      jsonBody: { error: error.message },
+      status: error.status || 500,
+    };
+  }
+}
+
 app.http("getPendingSyncRecordings", {
   methods: ["GET"],
   authLevel: "anonymous",
   route: "recordings/pending-sync",
   handler: getPendingSyncRecordings,
+});
+
+app.http("reprocessRecording", {
+  methods: ["POST"],
+  authLevel: "anonymous",
+  route: "recordings/{id}/reprocess",
+  handler: reprocessRecording,
 });

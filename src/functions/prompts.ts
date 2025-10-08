@@ -7,6 +7,8 @@ import {
 import { authenticateRequest } from "../middleware/auth";
 import { CustomPrompt, BUILT_IN_PROMPTS } from "../models/custom-prompt";
 
+const SYSTEM_USER_ID = "11577eca-11f1-453f-81b3-d0bb46a995e3";
+
 // Get all prompts for user
 async function getPrompts(
   request: HttpRequest,
@@ -17,7 +19,16 @@ async function getPrompts(
 
     const userId = auth.sub;
 
-    const prompts = await CustomPrompt.find({ userId: userId }).sort({ createdAt: -1 });
+    // Get both system prompts and user's custom prompts
+    const prompts = await CustomPrompt.find({
+      $or: [
+        { userId: SYSTEM_USER_ID }, // System default prompts
+        { userId: userId }           // User's custom prompts
+      ]
+    }).sort({ createdAt: -1 });
+
+    context.log(`Found ${prompts.length} prompts for user ${userId} (including system prompts)`);
+    context.log(`System user ID: ${SYSTEM_USER_ID}`);
 
     return {
       jsonBody: { prompts },

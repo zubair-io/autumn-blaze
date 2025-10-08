@@ -7,7 +7,9 @@ import {
 import Anthropic from "@anthropic-ai/sdk";
 import { authenticateRequest } from "../middleware/auth";
 import { Recording } from "../models/recording";
-import { CustomPrompt, BUILT_IN_PROMPTS } from "../models/custom-prompt";
+import { CustomPrompt } from "../models/custom-prompt";
+
+const SYSTEM_USER_ID = "11577eca-11f1-453f-81b3-d0bb46a995e3";
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -34,26 +36,59 @@ async function processRecording(
     // Use Auth0 sub as userId directly
     const userId = auth.sub;
 
-    // Find matching prompt in database
+    // Smart prompt matching - check beginning of transcript for trigger words
     let matchedPrompt;
-    if (triggerWord) {
-      // Strip punctuation from trigger word
-      const cleanTriggerWord = triggerWord.toLowerCase().replace(/[.,!?;:]+$/g, '');
+    let matchedTriggerWord: string | null = null;
 
+    // Get all active prompts (both system and user's custom prompts)
+    const allAvailablePrompts = await CustomPrompt.find({
+      $or: [
+        { userId: SYSTEM_USER_ID }, // System default prompts
+        { userId: userId }           // User's custom prompts
+      ],
+      isActive: true,
+    });
+
+    // Normalize transcript
+    const normalizedTranscript = transcript.toLowerCase().replace(/^[.,!?;:]+/g, '').trim();
+
+    // Sort prompts by trigger word length (longest first) to match "to do" before "to"
+    const sortedPrompts = allAvailablePrompts.sort((a, b) =>
+      b.triggerWord.length - a.triggerWord.length
+    );
+
+    // Find first matching prompt
+    for (const prompt of sortedPrompts) {
+      const triggerPattern = prompt.triggerWord.toLowerCase().replace(/[.,!?;:]+$/g, '');
+      // Check if transcript starts with this trigger word (with optional punctuation after)
+      const regex = new RegExp(`^${triggerPattern}[.,!?;:\\s]`, 'i');
+      if (normalizedTranscript.startsWith(triggerPattern + ' ') ||
+          normalizedTranscript.startsWith(triggerPattern + '.') ||
+          normalizedTranscript.startsWith(triggerPattern + ',') ||
+          normalizedTranscript.startsWith(triggerPattern + '!') ||
+          normalizedTranscript.startsWith(triggerPattern + '?') ||
+          normalizedTranscript === triggerPattern) {
+        matchedPrompt = prompt;
+        matchedTriggerWord = triggerPattern;
+        context.log(`Matched trigger word: "${triggerPattern}"`);
+        break;
+      }
+    }
+
+    // Fallback to original triggerWord parameter if provided and no match found
+    if (!matchedPrompt && triggerWord) {
+      const cleanTriggerWord = triggerWord.toLowerCase().replace(/[.,!?;:]+$/g, '');
       matchedPrompt = await CustomPrompt.findOne({
-        userId: userId,
+        $or: [
+          { userId: SYSTEM_USER_ID },
+          { userId: userId }
+        ],
         triggerWord: cleanTriggerWord,
         isActive: true,
       });
 
-      // If not found in database, check built-in prompts
-      if (!matchedPrompt) {
-        const builtInPrompt = BUILT_IN_PROMPTS.find(
-          (p) => p.triggerWord === cleanTriggerWord
-        );
-        if (builtInPrompt) {
-          matchedPrompt = builtInPrompt as any;
-        }
+      if (matchedPrompt) {
+        matchedTriggerWord = cleanTriggerWord;
       }
     }
 
@@ -65,9 +100,9 @@ async function processRecording(
 
     // Process with Claude if we have a prompt
     if (matchedPrompt) {
-      // Remove trigger word from transcript (strip punctuation first)
-      const cleanTranscript = triggerWord
-        ? transcript.replace(new RegExp(`^${triggerWord.replace(/[.,!?;:]+$/g, '')}[.,!?;:]*\\s*`, "i"), "")
+      // Remove trigger word from transcript
+      const cleanTranscript = matchedTriggerWord
+        ? transcript.replace(new RegExp(`^${matchedTriggerWord.replace(/[.,!?;:]+$/g, '')}[.,!?;:]*\\s*`, "i"), "")
         : transcript;
 
       const message = await anthropic.messages.create({

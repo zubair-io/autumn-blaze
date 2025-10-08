@@ -97,7 +97,7 @@ Do NOT make it overly formal or corporate if the speaker is being casual. Keep t
     isBuiltIn: true,
   },
   {
-    triggerWord: "todo",
+    triggerWord: "to do",
     promptText:
       "Extract all action items and tasks from this transcript. Format as a clear todo list with each item on its own line. Include any mentioned deadlines or priorities.",
     icon: "checkmark.circle",
