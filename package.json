@@ -20,6 +20,7 @@
     "@atproto/repo": "^0.6.2",
     "@atproto/xrpc": "^0.6.6",
     "@azure/functions": "^4.0.0",
+    "@azure/storage-blob": "^12.28.0",
     "@google/generative-ai": "^0.21.0",
     "@ipld/car": "^5.4.0",
     "@ipld/dag-cbor": "9.2.2",
