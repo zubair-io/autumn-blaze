@@ -6,7 +6,6 @@ import {
 } from "@azure/functions";
 import { BlobServiceClient } from "@azure/storage-blob";
 import { authenticateRequest } from "../middleware/auth";
-import { Recording } from "../models/recording";
 import { RecordingPaperService } from "../services/recording-paper.service";
 
 const blobServiceClient = BlobServiceClient.fromConnectionString(

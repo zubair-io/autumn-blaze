@@ -6,7 +6,6 @@ import {
 } from "@azure/functions";
 import Anthropic from "@anthropic-ai/sdk";
 import { authenticateRequest } from "../middleware/auth";
-import { Recording } from "../models/recording";
 import { CustomPrompt } from "../models/custom-prompt";
 import { RecordingPaperService } from "../services/recording-paper.service";
 
@@ -145,13 +144,16 @@ async function processRecording(
     });
 
     console.log(`Recording ${recordingId} processed and saved to Paper.`);
-    console.log(recordingId, processedOutput, promptUsed);
 
     return {
       jsonBody: {
-        recordingId,
-        processedOutput,
-        promptUsed,
+        recordingId: paper.data.recordingId,
+        transcript: paper.data.transcript,
+        duration: paper.data.duration,
+        timestamp: paper.data.timestamp,
+        audioUrl: paper.data.audioUrl,
+        audioSyncStatus: paper.data.audioSyncStatus,
+        processingHistory: paper.data.processingHistory || [],
       },
       status: 200,
     };

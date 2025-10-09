@@ -6,7 +6,6 @@ import {
 } from "@azure/functions";
 import { BlobServiceClient } from "@azure/storage-blob";
 import { authenticateRequest } from "../middleware/auth";
-import { Recording } from "../models/recording";
 import { RecordingPaperService } from "../services/recording-paper.service";
 import { Paper } from "../models/paper.model";
 
@@ -33,23 +32,16 @@ async function getRecordings(
     // Get papers from Paper collection
     const papers = await recordingService.listRecordings(userId);
 
-    // Transform Paper documents to client format
-    const recordings = papers.map((paper) => {
-      const latest = recordingService.getLatestProcessedOutput(paper);
-      return {
-        recordingId: paper.data.recordingId,
-        transcript: paper.data.transcript,
-        processedOutput: latest?.output || "",
-        promptUsed: latest?.promptUsed || {
-          triggerWord: "none",
-          promptText: "",
-        },
-        duration: paper.data.duration,
-        timestamp: paper.data.timestamp,
-        audioUrl: paper.data.audioUrl,
-        audioSyncStatus: paper.data.audioSyncStatus,
-      };
-    });
+    // Return Paper data structure directly (no transformation)
+    const recordings = papers.map((paper) => ({
+      recordingId: paper.data.recordingId,
+      transcript: paper.data.transcript,
+      duration: paper.data.duration,
+      timestamp: paper.data.timestamp,
+      audioUrl: paper.data.audioUrl,
+      audioSyncStatus: paper.data.audioSyncStatus,
+      processingHistory: paper.data.processingHistory || [],
+    }));
 
     return {
       jsonBody: {
@@ -101,16 +93,14 @@ async function getRecordingById(
       };
     }
 
-    const latest = recordingService.getLatestProcessedOutput(paper);
     const recording = {
       recordingId: paper.data.recordingId,
       transcript: paper.data.transcript,
-      processedOutput: latest?.output || "",
-      promptUsed: latest?.promptUsed || { triggerWord: "none", promptText: "" },
       duration: paper.data.duration,
       timestamp: paper.data.timestamp,
       audioUrl: paper.data.audioUrl,
       audioSyncStatus: paper.data.audioSyncStatus,
+      processingHistory: paper.data.processingHistory || [],
     };
 
     return {
@@ -344,7 +334,7 @@ async function reprocessRecording(
     };
 
     // Add to processing history using the service
-    await recordingService.reprocessRecording(
+    const updatedPaper = await recordingService.reprocessRecording(
       paper._id.toString(),
       userId,
       processedOutput,
@@ -353,9 +343,13 @@ async function reprocessRecording(
 
     return {
       jsonBody: {
-        recordingId,
-        processedOutput,
-        promptUsed,
+        recordingId: updatedPaper.data.recordingId,
+        transcript: updatedPaper.data.transcript,
+        duration: updatedPaper.data.duration,
+        timestamp: updatedPaper.data.timestamp,
+        audioUrl: updatedPaper.data.audioUrl,
+        audioSyncStatus: updatedPaper.data.audioSyncStatus,
+        processingHistory: updatedPaper.data.processingHistory || [],
       },
       status: 200,
     };
