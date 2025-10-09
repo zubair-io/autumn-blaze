@@ -144,4 +144,58 @@ export class TagService {
       },
     );
   }
+
+  /**
+   * Get or create the global _recordings tag
+   * Auto-adds user to tag if not already present
+   */
+  async getOrCreateRecordingsTag(userId: string): Promise<ITag> {
+    // Try to find existing _recordings tag
+    let tag = await Tag.findOne({
+      type: "folder",
+      value: "_recordings",
+    });
+
+    if (!tag) {
+      // Create the _recordings tag with the user as first member
+      tag = await this.createTag(userId, {
+        type: "folder",
+        value: "_recordings",
+        label: "Recordings",
+      });
+      return tag;
+    }
+
+    // Check if user already has access
+    const hasAccess = tag.sharing?.sharedWith?.some(
+      (share) => share.userId === userId,
+    );
+
+    if (!hasAccess) {
+      // Add user to existing tag (bootstrap: user adds themselves)
+      const updatedTag = await Tag.findByIdAndUpdate(
+        tag._id,
+        {
+          $push: {
+            "sharing.sharedWith": {
+              userId: userId,
+              accessLevel: "write",
+            },
+          },
+        },
+        {
+          new: true,
+          runValidators: true,
+        },
+      );
+
+      if (!updatedTag) {
+        throw new Error("Failed to add user to recordings tag");
+      }
+
+      return updatedTag;
+    }
+
+    return tag;
+  }
 }
