@@ -39,5 +39,9 @@ PaperSchema.index({ tags: 1 });
 // Compound index for finding papers by tag and user
 PaperSchema.index({ tags: 1, createdBy: 1 });
 
+// Additional indexes for recording queries
+PaperSchema.index({ 'data.recordingId': 1, tags: 1 });
+PaperSchema.index({ 'data.audioSyncStatus': 1, tags: 1, createdBy: 1 });
+
 export const Paper =
   mongoose.models.Paper || model<IPaper>("Paper", PaperSchema);
