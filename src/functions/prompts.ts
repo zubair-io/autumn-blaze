@@ -28,7 +28,6 @@ async function getPrompts(
     });
 
     context.log(`Found ${prompts.length} prompts for user ${userId} (including system prompts)`);
-    context.log(`System user ID: ${SYSTEM_USER_ID}`);
 
     return {
       jsonBody: { prompts },
@@ -218,38 +217,38 @@ async function deletePrompt(
   }
 }
 
-// Initialize built-in prompts for a user
+// Initialize built-in prompts (creates system prompts shared by all users)
 async function initializeBuiltInPrompts(
   request: HttpRequest,
   context: InvocationContext,
 ): Promise<HttpResponseInit> {
   try {
-    const auth = await authenticateRequest(request, "write");
-
-    const userId = auth.sub;
+    // Authenticate to ensure only authenticated users can trigger this
+    await authenticateRequest(request, "write");
 
     const createdPrompts = [];
 
     for (const builtInPrompt of BUILT_IN_PROMPTS) {
-      // Check if already exists
+      // Check if system prompt already exists
       const existing = await CustomPrompt.findOne({
-        userId: userId,
+        userId: SYSTEM_USER_ID,
         triggerWord: builtInPrompt.triggerWord,
       });
 
       if (!existing) {
         const prompt = new CustomPrompt({
-          userId: userId,
+          userId: SYSTEM_USER_ID,  // System user, not current user
           ...builtInPrompt,
         });
         await prompt.save();
         createdPrompts.push(prompt);
+        context.log(`Created system prompt: ${builtInPrompt.triggerWord}`);
       }
     }
 
     return {
       jsonBody: {
-        message: `Initialized ${createdPrompts.length} built-in prompts`,
+        message: `Initialized ${createdPrompts.length} built-in system prompts`,
         prompts: createdPrompts,
       },
       status: 200,
