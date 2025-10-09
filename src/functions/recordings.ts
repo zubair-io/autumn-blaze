@@ -7,6 +7,8 @@ import {
 import { BlobServiceClient } from "@azure/storage-blob";
 import { authenticateRequest } from "../middleware/auth";
 import { Recording } from "../models/recording";
+import { RecordingPaperService } from "../services/recording-paper.service";
+import { Paper } from "../models/paper.model";
 
 const SYSTEM_USER_ID = "11577eca-11f1-453f-81b3-d0bb46a995e3";
 
@@ -25,34 +27,38 @@ async function getRecordings(
 
     const userId = auth.sub;
 
-    // Pagination parameters
-    const limit = parseInt(request.query.get('limit') || '50', 10);
-    const offset = parseInt(request.query.get('offset') || '0', 10);
-    const search = request.query.get('search');
+    const recordingService = new RecordingPaperService();
+    await recordingService.initialize();
 
-    let query: any = { userId: userId };
+    // Get papers from Paper collection
+    const papers = await recordingService.listRecordings(userId);
 
-    // Text search if provided
-    if (search) {
-      query.$text = { $search: search };
-    }
-
-    const recordings = await Recording.find(query)
-      .sort({ timestamp: -1 })
-      .skip(offset)
-      .limit(Math.min(limit, 100)) // Max 100 per request
-      .select('-__v');
-
-    const total = await Recording.countDocuments(query);
+    // Transform Paper documents to client format
+    const recordings = papers.map((paper) => {
+      const latest = recordingService.getLatestProcessedOutput(paper);
+      return {
+        recordingId: paper.data.recordingId,
+        transcript: paper.data.transcript,
+        processedOutput: latest?.output || "",
+        promptUsed: latest?.promptUsed || {
+          triggerWord: "none",
+          promptText: "",
+        },
+        duration: paper.data.duration,
+        timestamp: paper.data.timestamp,
+        audioUrl: paper.data.audioUrl,
+        audioSyncStatus: paper.data.audioSyncStatus,
+      };
+    });
 
     return {
       jsonBody: {
         recordings,
         pagination: {
-          total,
-          limit,
-          offset,
-          hasMore: offset + recordings.length < total,
+          total: recordings.length,
+          limit: 100,
+          offset: 0,
+          hasMore: false,
         },
       },
       status: 200,
@@ -77,17 +83,35 @@ async function getRecordingById(
 
     const userId = auth.sub;
 
-    const recording = await Recording.findOne({
-      recordingId,
-      userId: userId,
-    }).select('-__v');
+    const recordingService = new RecordingPaperService();
+    await recordingService.initialize();
 
-    if (!recording) {
+    const recordingsTag = await recordingService['tagService'].getOrCreateRecordingsTag(userId);
+
+    const paper = await Paper.findOne({
+      "data.recordingId": recordingId,
+      tags: recordingsTag._id,
+      createdBy: userId,
+    });
+
+    if (!paper) {
       return {
         jsonBody: { error: 'Recording not found' },
         status: 404,
       };
     }
+
+    const latest = recordingService.getLatestProcessedOutput(paper);
+    const recording = {
+      recordingId: paper.data.recordingId,
+      transcript: paper.data.transcript,
+      processedOutput: latest?.output || "",
+      promptUsed: latest?.promptUsed || { triggerWord: "none", promptText: "" },
+      duration: paper.data.duration,
+      timestamp: paper.data.timestamp,
+      audioUrl: paper.data.audioUrl,
+      audioSyncStatus: paper.data.audioSyncStatus,
+    };
 
     return {
       jsonBody: { recording },
@@ -113,12 +137,18 @@ async function deleteRecording(
 
     const userId = auth.sub;
 
-    const recording = await Recording.findOne({
-      recordingId,
-      userId: userId,
+    const recordingService = new RecordingPaperService();
+    await recordingService.initialize();
+
+    const recordingsTag = await recordingService['tagService'].getOrCreateRecordingsTag(userId);
+
+    const paper = await Paper.findOne({
+      "data.recordingId": recordingId,
+      tags: recordingsTag._id,
+      createdBy: userId,
     });
 
-    if (!recording) {
+    if (!paper) {
       return {
         jsonBody: { error: 'Recording not found' },
         status: 404,
@@ -126,7 +156,7 @@ async function deleteRecording(
     }
 
     // Delete audio from blob storage if it exists
-    if (recording.audioUrl) {
+    if (paper.data.audioUrl) {
       try {
         const blobName = `${userId}/${recordingId}.m4a`;
         const containerClient = blobServiceClient.getContainerClient(containerName);
@@ -138,7 +168,7 @@ async function deleteRecording(
       }
     }
 
-    await recording.deleteOne();
+    await paper.deleteOne();
 
     return {
       jsonBody: { message: 'Recording deleted successfully' },
@@ -163,12 +193,24 @@ async function getPendingSyncRecordings(
 
     const userId = auth.sub;
 
-    const recordings = await Recording.find({
-      userId: userId,
-      audioSyncStatus: 'pending',
+    const recordingService = new RecordingPaperService();
+    await recordingService.initialize();
+
+    const recordingsTag = await recordingService['tagService'].getOrCreateRecordingsTag(userId);
+
+    const papers = await Paper.find({
+      tags: recordingsTag._id,
+      createdBy: userId,
+      "data.audioSyncStatus": 'pending',
     })
-      .sort({ timestamp: 1 }) // Oldest first
-      .select('recordingId timestamp audioSyncStatus');
+      .sort({ "data.timestamp": 1 }) // Oldest first
+      .select('data.recordingId data.timestamp data.audioSyncStatus');
+
+    const recordings = papers.map(paper => ({
+      recordingId: paper.data.recordingId,
+      timestamp: paper.data.timestamp,
+      audioSyncStatus: paper.data.audioSyncStatus,
+    }));
 
     return {
       jsonBody: { recordings },
@@ -225,13 +267,19 @@ async function reprocessRecording(
 
     const userId = auth.sub;
 
-    // Get the recording
-    const recording = await Recording.findOne({
-      recordingId,
-      userId: userId,
+    const recordingService = new RecordingPaperService();
+    await recordingService.initialize();
+
+    const recordingsTag = await recordingService['tagService'].getOrCreateRecordingsTag(userId);
+
+    // Get the recording paper
+    const paper = await Paper.findOne({
+      "data.recordingId": recordingId,
+      tags: recordingsTag._id,
+      createdBy: userId,
     });
 
-    if (!recording) {
+    if (!paper) {
       return {
         jsonBody: { error: "Recording not found" },
         status: 404,
@@ -266,7 +314,7 @@ async function reprocessRecording(
     }
 
     // Remove trigger word from transcript
-    const cleanTranscript = recording.transcript.replace(
+    const cleanTranscript = paper.data.transcript.replace(
       new RegExp(`^${cleanTriggerWord}[.,!?;:]*\\s*`, "i"),
       ""
     );
@@ -285,24 +333,29 @@ async function reprocessRecording(
     });
 
     const textContent = message.content.find((block) => block.type === "text");
-    let processedOutput = recording.transcript;
+    let processedOutput = paper.data.transcript;
     if (textContent && textContent.type === "text") {
       processedOutput = textContent.text;
     }
 
-    // Update the recording
-    recording.processedOutput = processedOutput;
-    recording.promptUsed = {
+    const promptUsed = {
       triggerWord: matchedPrompt.triggerWord,
       promptText: matchedPrompt.promptText,
     };
-    await recording.save();
+
+    // Add to processing history using the service
+    await recordingService.reprocessRecording(
+      paper._id.toString(),
+      userId,
+      processedOutput,
+      promptUsed
+    );
 
     return {
       jsonBody: {
         recordingId,
         processedOutput,
-        promptUsed: recording.promptUsed,
+        promptUsed,
       },
       status: 200,
     };

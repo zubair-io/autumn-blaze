@@ -8,6 +8,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { authenticateRequest } from "../middleware/auth";
 import { Recording } from "../models/recording";
 import { CustomPrompt } from "../models/custom-prompt";
+import { RecordingPaperService } from "../services/recording-paper.service";
 
 const SYSTEM_USER_ID = "11577eca-11f1-453f-81b3-d0bb46a995e3";
 
@@ -130,20 +131,20 @@ async function processRecording(
       };
     }
 
-    // Save recording
-    const recording = new Recording({
+    // Save recording in Paper collection
+    const recordingService = new RecordingPaperService();
+    await recordingService.initialize();
+
+    const paper = await recordingService.createRecording(userId, {
       recordingId,
-      userId: userId,
       transcript,
       processedOutput,
       promptUsed,
       duration,
       timestamp: new Date(timestamp),
-      audioSyncStatus: "pending",
     });
 
-    await recording.save();
-    console.log(`Recording ${recordingId} processed and saved.`);
+    console.log(`Recording ${recordingId} processed and saved to Paper.`);
     console.log(recordingId, processedOutput, promptUsed);
 
     return {

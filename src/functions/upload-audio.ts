@@ -7,6 +7,7 @@ import {
 import { BlobServiceClient } from "@azure/storage-blob";
 import { authenticateRequest } from "../middleware/auth";
 import { Recording } from "../models/recording";
+import { RecordingPaperService } from "../services/recording-paper.service";
 
 const blobServiceClient = BlobServiceClient.fromConnectionString(
   process.env.AZURE_STORAGE_CONNECTION_STRING!
@@ -36,19 +37,6 @@ async function uploadAudio(
       };
     }
 
-    // Verify recording belongs to user
-    const recording = await Recording.findOne({
-      recordingId,
-      userId: userId,
-    });
-
-    if (!recording) {
-      return {
-        jsonBody: { error: 'Recording not found' },
-        status: 404,
-      };
-    }
-
     // Upload to Azure Blob Storage
     const blobName = `${userId}/${recordingId}.m4a`;
     const containerClient = blobServiceClient.getContainerClient(containerName);
@@ -65,11 +53,16 @@ async function uploadAudio(
 
     const audioUrl = blockBlobClient.url;
 
-    // Update recording with audio URL and status
-    recording.audioUrl = audioUrl;
-    recording.fileSize = parseInt(fileSize, 10);
-    recording.audioSyncStatus = 'uploaded';
-    await recording.save();
+    // Update recording with audio URL and status using Paper service
+    const recordingService = new RecordingPaperService();
+    await recordingService.initialize();
+
+    await recordingService.updateAudioStatus(
+      recordingId,
+      userId,
+      'uploaded',
+      audioUrl
+    );
 
     return {
       jsonBody: {
@@ -87,9 +80,12 @@ async function uploadAudio(
       const formData = await request.formData();
       const recordingId = formData.get('recordingId') as string;
       if (recordingId) {
-        await Recording.updateOne(
-          { recordingId },
-          { audioSyncStatus: 'failed' }
+        const recordingService = new RecordingPaperService();
+        await recordingService.initialize();
+        await recordingService.updateAudioStatus(
+          recordingId,
+          auth.sub,
+          'failed'
         );
       }
     } catch (updateError) {
