@@ -149,7 +149,7 @@ export class TagService {
    * Get or create the global _recordings tag
    * Auto-adds user to tag if not already present
    */
-  async getOrCreateRecordingsTag(userId: string): Promise<ITag> {
+  async getOrCreateRecordingsTag(userId: string): Promise<any> {
     // Try to find existing _recordings tag
     let tag = await Tag.findOne({
       type: "folder",
@@ -158,12 +158,12 @@ export class TagService {
 
     if (!tag) {
       // Create the _recordings tag with the user as first member
-      tag = await this.createTag(userId, {
+      const createdTag: any = await this.createTag(userId, {
         type: "folder",
         value: "_recordings",
         label: "Recordings",
       });
-      return tag;
+      return createdTag;
     }
 
     // Check if user already has access

@@ -77,6 +77,7 @@ async function uploadAudio(
 
     // If we have the recordingId, mark as failed
     try {
+      const auth = await authenticateRequest(request, "write");
       const formData = await request.formData();
       const recordingId = formData.get('recordingId') as string;
       if (recordingId) {
