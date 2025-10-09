@@ -32,4 +32,4 @@ const TagSchema = new Schema(
   },
 );
 
-export const Tag = mongoose.model<ITagDocument>("Tag", TagSchema);
+export const Tag = mongoose.models.Tag || mongoose.model<ITagDocument>("Tag", TagSchema);

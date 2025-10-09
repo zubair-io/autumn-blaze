@@ -8,7 +8,10 @@
     "clean": "rimraf dist",
     "prestart": "npm run clean && npm run build",
     "start": "concurrently \"npm run watch\" \"func start --typescript\"",
-    "test": "echo \"No tests yet...\"",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest --coverage",
     "fun": "func start --typescript"
   },
   "dependencies": {
@@ -47,10 +50,14 @@
     "zstddec": "^0.1.0"
   },
   "devDependencies": {
-    "@types/node": "^20.x",
+    "@types/node": "^20.19.20",
+    "@vitest/coverage-v8": "^3.2.4",
+    "@vitest/ui": "^3.2.4",
     "concurrently": "^9.1.2",
+    "mongodb-memory-server": "^10.2.3",
     "rimraf": "^5.0.0",
-    "typescript": "5.7.2"
+    "typescript": "5.7.2",
+    "vitest": "^3.2.4"
   },
   "main": "dist/src/{index.js,functions/*.js}"
 }
