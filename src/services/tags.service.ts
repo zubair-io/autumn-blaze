@@ -146,21 +146,27 @@ export class TagService {
   }
 
   /**
-   * Get or create the global _recordings tag
-   * Auto-adds user to tag if not already present
+   * Get or create the user's recordings tag
+   * Each user has their own recordings folder tag
    */
   async getOrCreateRecordingsTag(userId: string): Promise<ITagDocument> {
-    // Try to find existing _recordings tag
+    // Try to find user's existing recordings tag
     let tag = await Tag.findOne({
       type: "folder",
-      value: "_recordings",
+      value: "recordings",
+      "sharing.sharedWith": {
+        $elemMatch: {
+          userId: userId,
+          accessLevel: "write",
+        },
+      },
     });
 
     if (!tag) {
-      // Create the _recordings tag with the user as first member
+      // Create the user's recordings tag
       const newTag = new Tag({
         type: "folder",
-        value: "_recordings",
+        value: "recordings",
         label: "Recordings",
         sharing: {
           sharedWith: [
@@ -173,36 +179,6 @@ export class TagService {
         },
       });
       return await newTag.save();
-    }
-
-    // Check if user already has access
-    const hasAccess = tag.sharing?.sharedWith?.some(
-      (share) => share.userId === userId,
-    );
-
-    if (!hasAccess) {
-      // Add user to existing tag (bootstrap: user adds themselves)
-      const updatedTag = await Tag.findByIdAndUpdate(
-        tag._id,
-        {
-          $push: {
-            "sharing.sharedWith": {
-              userId: userId,
-              accessLevel: "write",
-            },
-          },
-        },
-        {
-          new: true,
-          runValidators: true,
-        },
-      );
-
-      if (!updatedTag) {
-        throw new Error("Failed to add user to recordings tag");
-      }
-
-      return updatedTag;
     }
 
     return tag;
