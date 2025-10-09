@@ -1,4 +1,4 @@
-import { Tag } from "../models/tag";
+import { Tag, ITagDocument } from "../models/tag";
 
 import { AddUserToTagParams, ITag, ITagSharing } from "../types/tag";
 
@@ -149,7 +149,7 @@ export class TagService {
    * Get or create the global _recordings tag
    * Auto-adds user to tag if not already present
    */
-  async getOrCreateRecordingsTag(userId: string): Promise<any> {
+  async getOrCreateRecordingsTag(userId: string): Promise<ITagDocument> {
     // Try to find existing _recordings tag
     let tag = await Tag.findOne({
       type: "folder",
@@ -158,12 +158,21 @@ export class TagService {
 
     if (!tag) {
       // Create the _recordings tag with the user as first member
-      const createdTag: any = await this.createTag(userId, {
+      const newTag = new Tag({
         type: "folder",
         value: "_recordings",
         label: "Recordings",
+        sharing: {
+          sharedWith: [
+            {
+              userId: userId,
+              accessLevel: "write",
+            },
+          ],
+          isPublic: false,
+        },
       });
-      return createdTag;
+      return await newTag.save();
     }
 
     // Check if user already has access
