@@ -30,6 +30,7 @@ export class RecordingPaperService {
     // Create paper with recording data
     const paper = await Paper.create({
       tags: [recordingsTag._id],
+      type: "recording",
       createdBy: userId,
       data: {
         recordingId: recordingData.recordingId,

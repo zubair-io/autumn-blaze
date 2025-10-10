@@ -322,6 +322,7 @@ describe('RecordingPaperService', () => {
     it('should return null if no processing history', async () => {
       const paper = await Paper.create({
         tags: [],
+        type: 'recording',
         createdBy: TEST_USERS.user1,
         data: {
           recordingId: 'rec-001',
