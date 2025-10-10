@@ -31,11 +31,15 @@ async function getAllLegoCollectableRegistry(
   context: InvocationContext,
 ) {
   const itemProvider = "lego";
+  const updatedAt = request.query.get("updatedAt");
   const service = await CollectableRegistryService.getInstance();
 
-  const jsonBody = await service.getCollectableRegistryByProviderId(
-    itemProvider,
-  );
+  const jsonBody = updatedAt
+    ? await service.getCollectableRegistrySince(
+        itemProvider,
+        new Date(updatedAt),
+      )
+    : await service.getCollectableRegistryByProviderId(itemProvider);
 
   return {
     jsonBody,

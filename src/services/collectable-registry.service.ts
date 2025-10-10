@@ -140,6 +140,16 @@ export class CollectableRegistryService {
     return await CollectibleRegistry.find({ provider });
   }
 
+  async getCollectableRegistrySince(provider: string, since?: Date) {
+    const query: any = { provider };
+    if (since) {
+      // Use $gt (greater than) to avoid returning the same record twice
+      query.updatedAt = { $gt: since };
+    }
+    // Sort by updatedAt ascending so client can easily find the newest
+    return await CollectibleRegistry.find(query).sort({ updatedAt: 1 });
+  }
+
   async createLegoTags(itemId: string) {
     const legos = await getLegos();
     const lego = legos.find((lego) => lego.set === itemId);
