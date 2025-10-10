@@ -12,7 +12,9 @@
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
     "test:coverage": "vitest --coverage",
-    "fun": "func start --typescript"
+    "fun": "func start --typescript",
+    "migrate:collectibles": "ts-node src/scripts/migrate-collectibles-to-paper.ts",
+    "migrate:validate": "ts-node src/scripts/migrate-collectibles-to-paper.ts validate"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.33.1",
