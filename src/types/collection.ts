@@ -21,6 +21,8 @@ export interface ITag {
 export interface ICollection {
   itemId: string;
   userId: string;
+  provider: string;
+  registryData?: Types.ObjectId; // Reference to CollectibleRegistry
   status: "want" | "have" | "completed";
   quantity: number;
   created?: Date;

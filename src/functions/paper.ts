@@ -15,14 +15,15 @@ async function listPapers(
   try {
     const auth = await authenticateRequest(request, "read");
 
-    // Check if tag filter is provided
+    // Check if tag and type filters are provided
     const tagId = request.query.get("tagId");
+    const type = request.query.get("type");
 
     let papers;
     if (tagId) {
-      papers = await PaperService.listPapersByTag(auth.sub, tagId);
+      papers = await PaperService.listPapersByTag(auth.sub, tagId, type);
     } else {
-      papers = await PaperService.listUserPapers(auth.sub);
+      papers = await PaperService.listUserPapers(auth.sub, type);
     }
 
     return {
@@ -50,6 +51,13 @@ async function createPaper(
     if (!body.tags || !Array.isArray(body.tags) || body.tags.length === 0) {
       return {
         jsonBody: { error: "A tag is required" },
+        status: 400,
+      };
+    }
+
+    if (!body.type) {
+      return {
+        jsonBody: { error: "Type is required" },
         status: 400,
       };
     }

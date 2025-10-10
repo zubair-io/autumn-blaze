@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import { Paper, IPaper } from "../models/paper.model";
 import { Tag } from "../models/tag";
+import { CollectibleRegistry } from "../models/collectible-registry";
 import { HttpError } from "../utils/error";
 
 export class PaperService {
@@ -53,6 +54,7 @@ export class PaperService {
   static async listPapersByTag(
     userId: string,
     tagId: string,
+    type?: string,
   ): Promise<IPaper[]> {
     // First check if user has access to the tag
     const tag = await Tag.findOne({
@@ -67,11 +69,15 @@ export class PaperService {
       throw new HttpError("Tag not found or access denied", 404);
     }
 
+    // Build query
+    const query: any = { tags: tagId };
+    if (type) {
+      query.type = type;
+    }
+
     // Find papers with this tag
     // We only need to check if the paper has the tag since access is controlled by the tag
-    const papers = await Paper.find({
-      tags: tagId,
-    }).populate("tags");
+    const papers = await Paper.find(query).populate("tags");
 
     return papers;
   }
@@ -79,11 +85,18 @@ export class PaperService {
   /**
    * List all papers for a user
    */
-  static async listUserPapers(userId: string): Promise<IPaper[]> {
+  static async listUserPapers(
+    userId: string,
+    type?: string,
+  ): Promise<IPaper[]> {
+    // Build query
+    const baseQuery: any = { createdBy: userId };
+    if (type) {
+      baseQuery.type = type;
+    }
+
     // Find papers created by user
-    const ownedPapers = await Paper.find({ createdBy: userId }).populate(
-      "tags",
-    );
+    const ownedPapers = await Paper.find(baseQuery).populate("tags");
 
     // Find accessible tags
     const accessibleTags = await Tag.find({
@@ -97,10 +110,15 @@ export class PaperService {
       return ownedPapers;
     }
 
-    const sharedPapers = await Paper.find({
+    const sharedQuery: any = {
       tags: { $in: tagIds },
       createdBy: { $ne: userId }, // Don't include papers the user already owns
-    }).populate("tags");
+    };
+    if (type) {
+      sharedQuery.type = type;
+    }
+
+    const sharedPapers = await Paper.find(sharedQuery).populate("tags");
 
     // Combine and remove duplicates
     const allPaperIds = new Set(ownedPapers.map((p) => p._id.toString()));
@@ -128,11 +146,16 @@ export class PaperService {
    */
   static async createPaper(
     userId: string,
-    data: { tags: string[]; data?: any },
+    data: { tags: string[]; type: string; data?: any },
   ): Promise<IPaper> {
     // Validate a single tag is provided
     if (!data.tags || !data.tags.length) {
       throw new HttpError("A tag is required", 400);
+    }
+
+    // Validate type is provided
+    if (!data.type) {
+      throw new HttpError("Type is required", 400);
     }
 
     // For now, just use the first tag
@@ -158,6 +181,7 @@ export class PaperService {
     // Create the paper
     const paper = new Paper({
       tags: [tagId],
+      type: data.type,
       data: data.data || {},
       createdBy: userId,
     });
