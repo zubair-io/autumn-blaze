@@ -4,7 +4,7 @@
  * Tests the complete migration process and validates data integrity
  */
 
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import mongoose from "mongoose";
 import { Collection } from "../../src/models/collectible";
 import { Paper } from "../../src/models/paper.model";
@@ -20,8 +20,8 @@ describe("Collectible to Paper Migration", () => {
   let testTagId: string;
   let testRegistryId: string;
 
-  beforeAll(async () => {
-    // Setup test data
+  beforeEach(async () => {
+    // Create fresh test data for each test
     testUserId = "migration-test-user";
 
     // Create test tag
@@ -43,161 +43,145 @@ describe("Collectible to Paper Migration", () => {
     });
     testRegistryId = registry._id.toString();
 
-    // Clear any existing test data
-    await Collection.deleteMany({ userId: testUserId });
-    await Paper.deleteMany({ createdBy: testUserId });
-  });
-
-  afterAll(async () => {
-    // Cleanup
-    await Collection.deleteMany({ userId: testUserId });
-    await Paper.deleteMany({ createdBy: testUserId });
-    await Tag.deleteMany({ createdBy: testUserId });
-    await CollectibleRegistry.deleteMany({ providerId: "test-123" });
-  });
-
-  describe("Before Migration", () => {
-    it("should have collectibles in Collectible collection", async () => {
-      // Create test collectibles
-      await Collection.create({
-        itemId: "test-item-1",
-        userId: testUserId,
-        provider: "rebrickable",
-        registryData: testRegistryId,
-        status: "have",
-        quantity: 1,
-        tags: [testTagId],
-      });
-
-      await Collection.create({
-        itemId: "test-item-2",
-        userId: testUserId,
-        provider: "rebrickable",
-        registryData: testRegistryId,
-        status: "want",
-        quantity: 2,
-        tags: [testTagId],
-      });
-
-      const count = await Collection.countDocuments({ userId: testUserId });
-      expect(count).toBe(2);
+    // Create test collectibles
+    await Collection.create({
+      itemId: "test-item-1",
+      userId: testUserId,
+      provider: "rebrickable",
+      registryData: testRegistryId,
+      status: "have",
+      quantity: 1,
+      tags: [testTagId],
     });
 
-    it("should have no collectible papers yet", async () => {
-      const count = await Paper.countDocuments({
-        createdBy: testUserId,
-        type: "collectible",
-      });
-      expect(count).toBe(0);
+    await Collection.create({
+      itemId: "test-item-2",
+      userId: testUserId,
+      provider: "rebrickable",
+      registryData: testRegistryId,
+      status: "want",
+      quantity: 2,
+      tags: [testTagId],
     });
   });
 
-  describe("Migration Process", () => {
-    it("should migrate all collectibles to paper", async () => {
-      const result = await migrateCollectiblesToPaper();
-
-      expect(result.total).toBeGreaterThanOrEqual(2);
-      expect(result.errors).toHaveLength(0);
+  it("should complete full migration workflow with data integrity", async () => {
+    // 1. Verify initial state
+    const initialCollectibleCount = await Collection.countDocuments({
+      userId: testUserId,
+    });
+    const initialPaperCount = await Paper.countDocuments({
+      createdBy: testUserId,
+      type: "collectible",
     });
 
-    it("should skip already migrated items on re-run", async () => {
-      const result = await migrateCollectiblesToPaper();
+    expect(initialCollectibleCount).toBe(2);
+    expect(initialPaperCount).toBe(0);
 
-      expect(result.skipped).toBeGreaterThanOrEqual(2);
+    // 2. Run migration
+    const result = await migrateCollectiblesToPaper({
+      skipConnect: true,
+      skipDisconnect: true,
     });
+
+    expect(result.total).toBe(2);
+    expect(result.migrated).toBe(2);
+    expect(result.skipped).toBe(0);
+    expect(result.errors).toHaveLength(0);
+
+    // 3. Verify papers were created
+    const papers = await Paper.find({
+      createdBy: testUserId,
+      type: "collectible",
+    });
+    expect(papers.length).toBe(2);
+
+    // 4. Verify data preservation
+    const originalCollectible = await Collection.findOne({
+      itemId: "test-item-1",
+      userId: testUserId,
+    });
+
+    const migratedPaper = await Paper.findOne({
+      createdBy: testUserId,
+      "data.itemId": "test-item-1",
+    });
+
+    expect(migratedPaper).toBeDefined();
+    expect(migratedPaper!.type).toBe("collectible");
+    expect(migratedPaper!.createdBy).toBe(originalCollectible!.userId);
+    expect(migratedPaper!.data.itemId).toBe(originalCollectible!.itemId);
+    expect(migratedPaper!.data.provider).toBe(originalCollectible!.provider);
+    expect(migratedPaper!.data.status).toBe(originalCollectible!.status);
+    expect(migratedPaper!.data.quantity).toBe(originalCollectible!.quantity);
+
+    // 5. Verify tags were preserved
+    expect(migratedPaper!.tags).toHaveLength(1);
+    expect(migratedPaper!.tags[0].toString()).toBe(testTagId);
+
+    // 6. Verify registry reference
+    expect(migratedPaper!.data.registryData.toString()).toBe(testRegistryId);
+
+    // 7. Verify counts match
+    const finalCollectibleCount = await Collection.countDocuments({
+      userId: testUserId,
+    });
+    const finalPaperCount = await Paper.countDocuments({
+      createdBy: testUserId,
+      type: "collectible",
+    });
+    expect(finalPaperCount).toBe(finalCollectibleCount);
   });
 
-  describe("After Migration", () => {
-    it("should have papers in Paper collection", async () => {
-      const papers = await Paper.find({
-        createdBy: testUserId,
-        type: "collectible",
-      });
-
-      expect(papers.length).toBeGreaterThanOrEqual(2);
+  it("should skip already migrated items on re-run", async () => {
+    // Run migration first time
+    const firstRun = await migrateCollectiblesToPaper({
+      skipConnect: true,
+      skipDisconnect: true,
     });
 
-    it("should preserve all collectible data", async () => {
-      const originalCollectible = await Collection.findOne({
-        itemId: "test-item-1",
-        userId: testUserId,
-      });
+    expect(firstRun.total).toBe(2);
+    expect(firstRun.migrated).toBe(2);
+    expect(firstRun.skipped).toBe(0);
 
-      const migratedPaper = await Paper.findOne({
-        createdBy: testUserId,
-        "data.itemId": "test-item-1",
-      });
-
-      expect(migratedPaper).toBeDefined();
-      expect(migratedPaper!.type).toBe("collectible");
-      expect(migratedPaper!.createdBy).toBe(originalCollectible!.userId);
-      expect(migratedPaper!.data.itemId).toBe(originalCollectible!.itemId);
-      expect(migratedPaper!.data.provider).toBe(originalCollectible!.provider);
-      expect(migratedPaper!.data.status).toBe(originalCollectible!.status);
-      expect(migratedPaper!.data.quantity).toBe(originalCollectible!.quantity);
+    // Run migration second time
+    const secondRun = await migrateCollectiblesToPaper({
+      skipConnect: true,
+      skipDisconnect: true,
     });
 
-    it("should preserve tags references", async () => {
-      const migratedPaper = await Paper.findOne({
-        createdBy: testUserId,
-        "data.itemId": "test-item-1",
-      }).populate("tags");
-
-      expect(migratedPaper).toBeDefined();
-      expect(migratedPaper!.tags).toHaveLength(1);
-      expect((migratedPaper!.tags[0] as any)._id.toString()).toBe(testTagId);
-    });
-
-    it("should preserve registry references", async () => {
-      const migratedPaper = await Paper.findOne({
-        createdBy: testUserId,
-        "data.itemId": "test-item-1",
-      });
-
-      expect(migratedPaper).toBeDefined();
-      expect(migratedPaper!.data.registryData.toString()).toBe(testRegistryId);
-    });
-
-    it("should have matching counts", async () => {
-      const collectibleCount = await Collection.countDocuments({
-        userId: testUserId,
-      });
-      const paperCount = await Paper.countDocuments({
-        createdBy: testUserId,
-        type: "collectible",
-      });
-
-      expect(paperCount).toBe(collectibleCount);
-    });
+    expect(secondRun.total).toBe(2);
+    expect(secondRun.skipped).toBe(2);
+    expect(secondRun.migrated).toBe(0);
   });
 
-  describe("Query Performance After Migration", () => {
-    it("should efficiently query by type and createdBy", async () => {
-      const papers = await Paper.find({
-        type: "collectible",
-        createdBy: testUserId,
-      });
-
-      expect(papers.length).toBeGreaterThanOrEqual(2);
+  it("should support efficient queries after migration", async () => {
+    // Run migration
+    await migrateCollectiblesToPaper({
+      skipConnect: true,
+      skipDisconnect: true,
     });
 
-    it("should efficiently query by itemId", async () => {
-      const paper = await Paper.findOne({
-        "data.itemId": "test-item-1",
-        createdBy: testUserId,
-      });
-
-      expect(paper).toBeDefined();
-      expect(paper!.data.itemId).toBe("test-item-1");
+    // Query by type and createdBy
+    const papersByUser = await Paper.find({
+      type: "collectible",
+      createdBy: testUserId,
     });
+    expect(papersByUser.length).toBe(2);
 
-    it("should efficiently query by tags", async () => {
-      const papers = await Paper.find({
-        type: "collectible",
-        tags: testTagId,
-      });
-
-      expect(papers.length).toBeGreaterThanOrEqual(2);
+    // Query by itemId
+    const paperByItemId = await Paper.findOne({
+      "data.itemId": "test-item-1",
+      createdBy: testUserId,
     });
+    expect(paperByItemId).toBeDefined();
+    expect(paperByItemId!.data.itemId).toBe("test-item-1");
+
+    // Query by tags
+    const papersByTag = await Paper.find({
+      type: "collectible",
+      tags: testTagId,
+    });
+    expect(papersByTag.length).toBe(2);
   });
 });

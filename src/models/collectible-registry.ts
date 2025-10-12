@@ -73,7 +73,8 @@ const CollectibleRegistrySchema = new Schema(
   },
 );
 
-export const CollectibleRegistry = mongoose.model<ICollectibleRegistryDocument>(
-  "CollectibleRegistry",
-  CollectibleRegistrySchema,
-);
+export const CollectibleRegistry = mongoose.models.CollectibleRegistry ||
+  mongoose.model<ICollectibleRegistryDocument>(
+    "CollectibleRegistry",
+    CollectibleRegistrySchema,
+  );

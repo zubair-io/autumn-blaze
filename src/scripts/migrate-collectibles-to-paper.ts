@@ -22,7 +22,9 @@ interface MigrationResult {
   errors: Array<{ itemId: string; error: string }>;
 }
 
-async function migrateCollectiblesToPaper(): Promise<MigrationResult> {
+async function migrateCollectiblesToPaper(
+  options: { skipConnect?: boolean; skipDisconnect?: boolean } = {},
+): Promise<MigrationResult> {
   const result: MigrationResult = {
     total: 0,
     migrated: 0,
@@ -31,14 +33,18 @@ async function migrateCollectiblesToPaper(): Promise<MigrationResult> {
   };
 
   try {
-    // Connect to MongoDB
-    const mongoUri = process.env.MONGODB_URI;
-    if (!mongoUri) {
-      throw new Error("MONGODB_URI environment variable is required");
-    }
+    // Connect to MongoDB (skip if already connected in test environment)
+    if (!options.skipConnect) {
+      const mongoUri = process.env.MONGODB_URI;
+      if (!mongoUri) {
+        throw new Error("MONGODB_URI environment variable is required");
+      }
 
-    await mongoose.connect(mongoUri);
-    console.log("✅ Connected to MongoDB");
+      if (mongoose.connection.readyState !== 1) {
+        await mongoose.connect(mongoUri);
+        console.log("✅ Connected to MongoDB");
+      }
+    }
 
     // Fetch all collectibles
     const collectibles = await Collection.find({}).lean();
@@ -119,20 +125,30 @@ async function migrateCollectiblesToPaper(): Promise<MigrationResult> {
     console.error("Fatal migration error:", error);
     throw error;
   } finally {
-    await mongoose.disconnect();
-    console.log("\n✅ Disconnected from MongoDB");
+    // Only disconnect if we connected (not in test environment)
+    if (!options.skipDisconnect && mongoose.connection.readyState === 1) {
+      await mongoose.disconnect();
+      console.log("\n✅ Disconnected from MongoDB");
+    }
   }
 }
 
 // Validation function to compare collections
-async function validateMigration(): Promise<void> {
+async function validateMigration(
+  options: { skipConnect?: boolean; skipDisconnect?: boolean } = {},
+): Promise<void> {
   try {
-    const mongoUri = process.env.MONGODB_URI;
-    if (!mongoUri) {
-      throw new Error("MONGODB_URI environment variable is required");
-    }
+    // Connect to MongoDB (skip if already connected in test environment)
+    if (!options.skipConnect) {
+      const mongoUri = process.env.MONGODB_URI;
+      if (!mongoUri) {
+        throw new Error("MONGODB_URI environment variable is required");
+      }
 
-    await mongoose.connect(mongoUri);
+      if (mongoose.connection.readyState !== 1) {
+        await mongoose.connect(mongoUri);
+      }
+    }
     console.log("\n" + "=".repeat(50));
     console.log("Validation Report:");
     console.log("=".repeat(50));
@@ -188,7 +204,10 @@ async function validateMigration(): Promise<void> {
       }
     }
   } finally {
-    await mongoose.disconnect();
+    // Only disconnect if we connected (not in test environment)
+    if (!options.skipDisconnect && mongoose.connection.readyState === 1) {
+      await mongoose.disconnect();
+    }
   }
 }
 
