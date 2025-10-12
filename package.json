@@ -58,6 +58,7 @@
     "concurrently": "^9.1.2",
     "mongodb-memory-server": "^10.2.3",
     "rimraf": "^5.0.0",
+    "ts-node": "^10.9.2",
     "typescript": "5.7.2",
     "vitest": "^3.2.4"
   },
