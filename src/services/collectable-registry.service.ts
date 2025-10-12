@@ -147,7 +147,8 @@ export class CollectableRegistryService {
       query.updatedAt = { $gt: since };
     }
     // Sort by updatedAt ascending so client can easily find the newest
-    return await CollectibleRegistry.find(query).sort({ updatedAt: 1 });
+    return await CollectibleRegistry.find(query);
+    //.sort({ updatedAt: 1 });
   }
 
   async createLegoTags(itemId: string) {
