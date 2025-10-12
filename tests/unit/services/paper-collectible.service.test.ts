@@ -29,7 +29,14 @@ describe("PaperService - Collectible Operations", () => {
     const tag = await Tag.create({
       type: "folder",
       value: "My LEGO Collection",
-      createdBy: userId,
+      sharing: {
+        sharedWith: [
+          {
+            userId: userId,
+            accessLevel: "write",
+          },
+        ],
+      },
     });
     tagId = tag._id.toString();
 
