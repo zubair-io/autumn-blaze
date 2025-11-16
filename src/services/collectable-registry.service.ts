@@ -5,7 +5,7 @@ import {
 // import Anthropic from "@anthropic-ai/sdk";
 import * as cheerio from "cheerio";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { getLegos, LegoThemes } from "./lego.service";
+import { getLegos, LegoThemes, fetchBricksetData } from "./lego.service";
 //var DOMParser = require("xmldom").DOMParser;
 import { DOMParser } from "prosemirror-model";
 import { Schema as ProseSchema } from "prosemirror-model";
@@ -28,7 +28,7 @@ interface ProseMirrorText {
   text: string;
 }
 
-function textToProseMirror(html: string) {
+export function textToProseMirror(html: string) {
   // if (!html.startsWith("<")) {
   // let n = html.split("\r\n<p><br>\r\n");
   // n[0] = `<p>${n[0].trim()}</p>`;
@@ -120,7 +120,7 @@ export class CollectableRegistryService {
 
   async getCollectableRegistry(
     providerId: string,
-    provider,
+    provider: "lego" | "book",
   ): Promise<ICollectibleRegistryDocument | null> {
     return await CollectibleRegistry.findOne({ providerId, provider });
   }
@@ -128,6 +128,11 @@ export class CollectableRegistryService {
   async createCollectableRegistry(
     input: CollectibleRegistry,
   ): Promise<ICollectibleRegistryDocument | any> {
+    console.log(
+      "Creating collectable registry:",
+      input.provider,
+      input.providerId,
+    );
     const collection = await CollectibleRegistry.create(input);
     return collection.toJSON();
   }
@@ -269,10 +274,22 @@ export class CollectableRegistryService {
       },
     ];
 
-    return { title, description, images, providerData, tags, upc, providerId };
+    return {
+      title,
+      description,
+      images,
+      providerData,
+      tags,
+      upc,
+      ean: "",
+      providerId,
+    };
   }
 
-  async createCollectableRegistryData(provider, providerId) {
+  async createCollectableRegistryData(
+    provider: "lego" | "book",
+    providerId: string,
+  ) {
     if (provider === "lego") {
       return await this.legoCollectableRegistry(providerId);
     }
@@ -282,19 +299,11 @@ export class CollectableRegistryService {
     throw new Error("Unknown Provider");
   }
 
-  async getOrCreateCollectableRegistry(
-    providerId: string,
-    provider: string,
-  ): Promise<ICollectibleRegistryDocument | any> {
-    const registry = await this.getCollectableRegistry(providerId, provider);
-    if (registry) {
-      return registry;
-    }
-
-    const { title, description, images, providerData, tags, upc } =
+  async createCollectableRegistryItem(provider, providerId) {
+    const { title, description, images, providerData, tags, upc, ean } =
       await this.createCollectableRegistryData(provider, providerId);
 
-    return await this.createCollectableRegistry({
+    const result = await this.createCollectableRegistry({
       providerId,
       provider,
       title,
@@ -303,7 +312,28 @@ export class CollectableRegistryService {
       providerData,
       tags,
       upc,
+      ean,
     });
+
+    return result;
+  }
+
+  async getOrCreateCollectableRegistry(
+    providerId: string,
+    provider: string,
+  ): Promise<ICollectibleRegistryDocument | any> {
+    console.log(
+      `[getOrCreateCollectableRegistry] Checking for existing: ${provider}/${providerId}`,
+    );
+    const registry = await this.getCollectableRegistry(providerId, provider);
+    if (registry) {
+      console.log(
+        `[getOrCreateCollectableRegistry] Found existing registry for ${providerId}`,
+      );
+      return registry;
+    }
+
+    return await this.createCollectableRegistryItem(provider, providerId);
   }
   cleanTitle(str: string) {
     const title = str
@@ -434,25 +464,22 @@ export class CollectableRegistryService {
       return lookupById;
     }
 
-    const { proseMirror: description, text: generatedText } =
-      await this.generateCollectableRegistryDescription(
-        providerId,
-        descriptionText,
-      );
+    // Fetch data from Brickset
+    const { ean, description } = await fetchBricksetData(providerId);
     const { tags, lego } = await this.createLegoTags(providerId);
 
     return this.createCollectableRegistry({
       upc,
+      ean: ean || "",
       providerId,
       provider: "lego",
       title,
-      description,
+      description: description || { type: "doc", content: [] },
       images: [`https://lego.justmaple.app/${providerId}.jpg`],
       providerData: {
         upc,
         upcData,
         description: descriptionText,
-        generatedText,
         lego,
       },
       tags,
@@ -460,197 +487,31 @@ export class CollectableRegistryService {
   }
 
   async legoCollectableRegistry(itemId: string) {
-    const {
-      title,
-      pageText,
-      rawText,
-      image,
-      description: desc,
-    } = await this.loadLegoProductPage(itemId);
-    const { proseMirror: description, text: generatedText } =
-      await this.generateCollectableRegistryDescription(itemId, pageText);
+    console.log(`[legoCollectableRegistry] Starting for itemId: ${itemId}`);
+
     const { tags, lego, title: altTitle } = await this.createLegoTags(itemId);
-    return {
-      upc: "",
-      title: title || altTitle,
-      description,
+    console.log(`[legoCollectableRegistry] Tags created, title: ${altTitle}`);
+
+    const { upc, ean, description } = await fetchBricksetData(itemId);
+    console.log(
+      `[legoCollectableRegistry] Brickset data fetched - UPC: ${upc}, EAN: ${ean}, hasDescription: ${!!description}`,
+    );
+
+    const result = {
+      upc: upc || "",
+      ean: ean || "",
+      title: altTitle,
+      description: description || { type: "doc", content: [] },
       images: [`https://lego.justmaple.app/${itemId}.jpg`],
       providerId: itemId,
       provider: "lego",
       tags,
       providerData: {
-        //  rawText,
-        image,
-        description: desc,
-        generatedText,
         lego,
       },
     };
+
+    console.log(`[legoCollectableRegistry] Returning data for ${itemId}`);
+    return result;
   }
-
-  async generateCollectableRegistryDescription(
-    setNumber: string,
-    webData: string,
-  ) {
-    const prompt = `You are tasked with creating a fun and informative description of a specific LEGO set based on information from the LEGO website. Follow these instructions carefully:
-            
-            1. For Lego Set Number ${setNumber} and  website data/description ${webData} into write a  informative description of a specific LEGO
-            2. this should be written in a professional tone, focusing on the set's features, contents, and design.
-            3. Create a formal and informative description of the LEGO set based on the information you find. Your description should:
-               a. Be written in a professional but engaging tone
-               b. Focus on the set's features, contents, and design
-               c. Include the following information if available:
-                  - Piece count
-                  - Minifigure count
-                  - Age range recommendation
-                  - Theme or product line the set belongs to
-                  - Any unique or notable features of the set
-                  - Dimensions of the completed model (if provided)
-            
-            4. Do NOT include any information about:
-               - Pricing
-               - Gifts with purchase
-               - Free shipping offers
-               - Any promotional or marketing language
-            
-            5. If the set is recommended for ages 18+, mention this but do not refer to it as a set \"exclusively for adults.\"
-            
-            6. Ensure your description is cohesive and well-structured, presenting the information in a logical order.
-            
-              
-            "Only respond with the requested information and no summary of the request"
-            Don't start with The LEGO set, identified by product number... or similar phrasing. Just start with the description.
-            Don't use the work "identified"
-            `;
-
-    const result = await model.generateContent(prompt);
-
-    const text = result.response.text();
-    return {
-      proseMirror: textToProseMirror(text),
-      text,
-    };
-
-    return;
-  }
-
-  async loadLegoProductPage(itemId: string) {
-    itemId = itemId.split("-")[0].trim();
-    let page = await fetch("https://www.lego.com/en-us/product/" + itemId);
-    if (page.status !== 200) {
-      page = await fetch(
-        `https://www.bricklink.com/v2/catalog/catalogitem.page?S=${itemId}-1`,
-      );
-    }
-    const rawText = await page.text();
-    const $ = cheerio.load(rawText);
-    const textArr = $("main")
-      .find("*")
-      .map((_, el) => $(el).text())
-      .get()
-
-      .filter((text) => text.trim().length > 3);
-
-    const uniqueSet = new Set(textArr);
-
-    const uniqueArray = Array.from(uniqueSet);
-    let title = this.cleanTitle(
-      $('meta[property="og:title"]').attr("content") || $("title").text(),
-    );
-
-    let description =
-      $('meta[property="og:description"]').attr("content") ||
-      $('meta[name="description"]').attr("content");
-    let image = $('meta[property="og:image"]').attr("content");
-
-    if (title.includes("Page Not Found")) {
-      title = null;
-      image = null;
-      description = null;
-    }
-
-    return {
-      title,
-      description,
-      image,
-      rawText,
-      pageText: `
-      ${title}
-      ${description}
-      ${uniqueArray.join("\n")}`,
-    };
-  }
-  //   async generateLegoDescription() {
-  //     const anthropic = new Anthropic({
-  //       // defaults to
-  //       apiKey: process.env["ANTHROPIC_API_KEY"],
-  //     });
-
-  //     const LEGO_WEBSITE_TEXT = "";
-  //     const SET_NAME = "";
-  //     const msg = await anthropic.messages.create({
-  //       model: "claude-3-5-sonnet-20241022",
-  //       max_tokens: 4096,
-  //       temperature: 0,
-  //       messages: [
-  //         {
-  //           role: "user",
-  //           content: [
-  //             {
-  //               type: "text",
-  //               text: `You are tasked with creating a formal and informative description of a specific LEGO set based on information from the LEGO website. Follow these instructions carefully:
-
-  //             1. You will be provided with the following inputs:
-  //             <lego_website_text>
-  //             ${LEGO_WEBSITE_TEXT}
-  //             </lego_website_text>
-
-  //             <set_name>
-  //             ${SET_NAME}
-  //             </set_name>
-
-  //             2. Search through the LEGO website text to find information specific to the LEGO set named in the <set_name> tags.
-
-  //             3. Create a formal and informative description of the LEGO set based on the information you find. Your description should:
-  //                a. Be written in a professional and objective tone
-  //                b. Focus on the set's features, contents, and design
-  //                c. Include the following information if available:
-  //                   - Piece count
-  //                   - Minifigure count
-  //                   - Age range recommendation
-  //                   - Theme or product line the set belongs to
-  //                   - Any unique or notable features of the set
-  //                   - Dimensions of the completed model (if provided)
-
-  //             4. Do NOT include any information about:
-  //                - Pricing
-  //                - Gifts with purchase
-  //                - Free shipping offers
-  //                - Any promotional or marketing language
-
-  //             5. If the set is recommended for ages 18+, mention this but do not refer to it as a set \"exclusively for adults.\"
-
-  //             6. Ensure your description is cohesive and well-structured, presenting the information in a logical order.
-
-  //             7. If you cannot find information about the specified set in the provided text, state that you don't have enough information to describe the set accurately.
-
-  //             8. Present your final description within <description> tags.
-
-  //             Example output format:
-  //             <description>
-  //             The LEGO [Set Name] is a [piece count]-piece set from the [Theme] product line. Designed for builders aged [age range], this set features [notable features]. The set includes [minifigure count] minifigures and builds into a model measuring [dimensions if available]. [Any other relevant, formal information about the set's design or play features.]
-  //             </description>
-
-  //             Remember to adjust the format and content based on the available information, always maintaining a formal and informative tone.`,
-  //             },
-  //           ],
-  //         },
-  //       ],
-  //     });
-  //     const text = msg.content.find((msg) => msg.type === "text").text;
-  //     return {
-  //       proseMirror: textToProseMirror(text),
-  //       text,
-  //     };
-  //   }
 }

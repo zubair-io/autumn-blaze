@@ -1,7 +1,111 @@
 import axios from "axios";
 import * as zlib from "node:zlib";
 import * as csv from "csvtojson";
+import Anthropic from "@anthropic-ai/sdk";
 import { createBlogFromText } from "../lib/file.utils";
+import { textToProseMirror } from "./collectable-registry.service";
+
+const anthropic = new Anthropic({
+  apiKey: process.env.ANTHROPIC_API_KEY,
+});
+
+async function fetchViaBrightData(url: string): Promise<string> {
+  const proxyResponse = await axios.post(
+    "https://api.brightdata.com/request?async=false",
+    {
+      zone: "web_unlocker1",
+      url: url,
+      format: "raw",
+      method: "GET",
+      country: "US",
+    },
+    {
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        Authorization: `Bearer ${process.env.BRIGHT_DATA_API_KEY}`,
+      },
+    },
+  );
+  return proxyResponse.data;
+}
+
+async function enhanceDescriptionWithClaude(
+  rawDescription: string,
+  setNumber: string,
+): Promise<any> {
+  if (!rawDescription) {
+    return null;
+  }
+
+  try {
+    console.log(`Enhancing description with Claude for set ${setNumber}`);
+    const message = await anthropic.messages.create({
+      model: "claude-sonnet-4-5-20250929",
+      max_tokens: 4096,
+      messages: [
+        {
+          role: "user",
+          content: `${legoDescriptionPrompt}\n\n${rawDescription}`,
+        },
+      ],
+    });
+
+    const textContent = message.content.find((block) => block.type === "text");
+    if (textContent && textContent.type === "text") {
+      return textToProseMirror(textContent.text);
+    }
+  } catch (claudeError) {
+    console.error(
+      `Failed to enhance description with Claude for set ${setNumber}:`,
+      claudeError.message,
+    );
+    // Fall back to raw description converted to ProseMirror
+    return textToProseMirror(rawDescription);
+  }
+
+  return textToProseMirror(rawDescription);
+}
+
+const legoDescriptionPrompt = `Parse the following content from a LEGO product page and extract key information 
+to write a natural, engaging product description. The input may be a full HTML 
+page, HTML snippet, or plain text.
+
+EXTRACT:
+- Product name and set number
+- Age range and piece count
+- Price and availability
+- Key features and scenes depicted
+- Minifigures included (with names/variants if available)
+- Special offers or gifts with purchase
+- Customer ratings (if present)
+- Thematic elements and story connections
+- Dimensions or scale (if mentioned)
+
+WRITE A DESCRIPTION THAT:
+- Sounds like it was written by an enthusiastic LEGO fan or collector
+- Captures the nostalgia and excitement of the theme
+- Mentions specific scenes or moments that can be recreated
+- Highlights unique or special elements (exclusive minifigures, detailed builds, rare pieces, etc.)
+- Uses natural, conversational language without obvious AI patterns
+- Includes practical details (piece count, age recommendation, price) woven naturally into the narrative
+- Mentions any special promotions or limited-time offers
+- Conveys why this set would appeal to fans of the source material
+- Balances technical building details with emotional/nostalgic appeal
+
+AVOID:
+- Overly promotional or marketing language
+- Repetitive phrases or obvious AI patterns (e.g., "delve into," "it's worth noting," "elevate your collection")
+- Generic descriptions that could apply to any LEGO set
+- Bullet points or lists (write in flowing paragraphs)
+- Corporate speak or overly formal tone
+- Claiming features or details not present in the source material
+
+TONE: Write as if you're recommending this set to a friend who loves both LEGO 
+and the source material. Be genuine, specific, and passionate without being 
+hyperbolic.
+
+`;
 
 interface Lego {
   set: any;
@@ -85,6 +189,160 @@ export async function getLegos(): Promise<Lego[]> {
   } catch (e) {
     const { body } = await downloadLego(legoJsonName);
     return body;
+  }
+}
+
+export async function fetchBricksetData(
+  setNumber: string,
+): Promise<{ upc?: string; ean?: string; description?: any }> {
+  try {
+    console.log(
+      `Fetching Brick Economy page for set ${setNumber} via Bright Data`,
+    );
+
+    // Use Bright Data web unlocker to fetch from Brick Economy
+    const html = await fetchViaBrightData(
+      `https://www.brickeconomy.com/set/${setNumber}/`,
+    );
+
+    const result: { upc?: string; ean?: string; description?: any } = {};
+
+    // Extract UPC and EAN from Brick Economy HTML
+    const upcMatch = html.match(/>UPC<\/div>\s*<div[^>]*>(\d+)<\/div>/);
+    const eanMatch = html.match(/>EAN<\/div>\s*<div[^>]*>(\d+)<\/div>/);
+
+    if (upcMatch && upcMatch[1]) {
+      result.upc = upcMatch[1];
+    }
+
+    if (eanMatch && eanMatch[1]) {
+      result.ean = eanMatch[1];
+    }
+
+    if (!result.upc && !result.ean) {
+      console.warn(`No UPC or EAN found for set ${setNumber}`);
+      return {};
+    }
+
+    // Try to get description from LEGO.com first
+    let description: any = null;
+
+    try {
+      // Remove -1 suffix from set number for LEGO.com URL
+      const legoSetNumber = setNumber.replace(/-1$/, "");
+      console.log(`Fetching LEGO.com description for set ${legoSetNumber}`);
+
+      const legoHtml = await fetchViaBrightData(
+        `https://www.lego.com/en-us/product/${legoSetNumber}`,
+      );
+
+      // Extract description from LEGO.com using regex
+      const regex = /"featuresText":"((?:[^"\\]|\\.)*)"/;
+      const match = legoHtml.match(regex);
+      const legoDescription = match ? match[1] : null;
+
+      if (legoDescription) {
+        console.log(`Found LEGO.com description for set ${setNumber}`);
+        description = await enhanceDescriptionWithClaude(
+          `Text:\n${legoDescription}`,
+          setNumber,
+        );
+      }
+    } catch (legoError) {
+      console.log(
+        `Failed to fetch LEGO.com description for set ${setNumber}, will try Brick Economy fallback`,
+      );
+    }
+
+    // Fallback 1: Try to extract from Brick Economy #setdescription_content
+    if (!description) {
+      const contentRegex = /<div id="setdescription_content">([\s\S]*?)<\/div>/;
+      const descMatch = html.match(contentRegex);
+
+      if (descMatch && descMatch[1]) {
+        let descriptionHtml = descMatch[1] + "</div>";
+
+        // Remove the button element
+        descriptionHtml = descriptionHtml.replace(
+          /<button[^>]*class="setdescription-close[^>]*>[\s\S]*?<\/button>/g,
+          "",
+        );
+
+        // Remove the footer div
+        descriptionHtml = descriptionHtml.replace(
+          /<div class="mt-10 text-light text-small">[\s\S]*?<\/div>/g,
+          "",
+        );
+
+        // Trim whitespace
+        descriptionHtml = descriptionHtml.trim();
+
+        if (descriptionHtml) {
+          console.log(
+            `Found Brick Economy #setdescription_content for set ${setNumber}`,
+          );
+          description = await enhanceDescriptionWithClaude(
+            `HTML:\n${descriptionHtml}`,
+            setNumber,
+          );
+        }
+      }
+    }
+
+    // Fallback 2: Try to extract from Brick Economy .setdescriptions div
+    if (!description) {
+      const fallbackRegex =
+        /<div class="well setdescriptions text-readable">\s*<div[^>]*>([\s\S]*?)<\/div>\s*<\/div>/;
+      const fallbackMatch = html.match(fallbackRegex);
+
+      if (fallbackMatch && fallbackMatch[1]) {
+        let fallbackHtml = fallbackMatch[1].trim();
+
+        // Remove the semibold pricing section
+        fallbackHtml = fallbackHtml.replace(
+          /<span class="semibold">[\s\S]*?<\/span>/g,
+          "",
+        );
+
+        // Clean up extra whitespace and <br> tags
+        fallbackHtml = fallbackHtml.replace(/<br\s*\/?>/g, " ");
+        fallbackHtml = fallbackHtml.replace(/\s+/g, " ").trim();
+
+        if (fallbackHtml) {
+          console.log(
+            `Using Brick Economy .setdescriptions fallback for set ${setNumber}`,
+          );
+          description = await enhanceDescriptionWithClaude(
+            `HTML:\n${fallbackHtml}`,
+            setNumber,
+          );
+        }
+      }
+    }
+
+    // Add description to result if found
+    if (description) {
+      result.description = description;
+    }
+
+    return result;
+  } catch (error) {
+    // Re-throw 429 errors to stop batch processing
+    if (error.response?.status === 429 || error.statusCode === 429) {
+      const rateLimitError: any = new Error("Rate limited");
+      rateLimitError.statusCode = 429;
+      throw rateLimitError;
+    }
+
+    console.error(
+      `Failed to fetch Brick Economy data for set ${setNumber}:`,
+      error.message,
+    );
+    if (error.response) {
+      console.error(`Response status: ${error.response.status}`);
+      console.error(`Response data:`, error.response?.data?.substring(0, 500));
+    }
+    return {};
   }
 }
 

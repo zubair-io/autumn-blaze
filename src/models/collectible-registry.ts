@@ -2,6 +2,7 @@ import mongoose, { Document, Schema } from "mongoose";
 
 export interface CollectibleRegistry {
   upc?: string;
+  ean?: string;
   title: string;
   description: any;
   images: string[];
@@ -45,6 +46,11 @@ const CollectibleRegistrySchema = new Schema(
       index: true,
     },
     upc: {
+      type: String,
+      required: false,
+      index: true,
+    },
+    ean: {
       type: String,
       required: false,
       index: true,
