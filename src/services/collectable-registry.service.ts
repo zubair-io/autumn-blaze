@@ -325,7 +325,7 @@ export class CollectableRegistryService {
     console.log(
       `[getOrCreateCollectableRegistry] Checking for existing: ${provider}/${providerId}`,
     );
-    const registry = await this.getCollectableRegistry(providerId, provider);
+    const registry = await this.getCollectableRegistry(providerId, provider as "lego" | "book");
     if (registry) {
       console.log(
         `[getOrCreateCollectableRegistry] Found existing registry for ${providerId}`,
