@@ -169,6 +169,8 @@ export async function getReplies(
     img: "",
     bskyPostId,
   };
+  try   {
+
   if (!bskyPostId) {
     const text = `
     ${registry.title}
@@ -203,6 +205,13 @@ https://justmaple.app/!/${registry._id}`;
       },
     }),
   };
+} 
+catch(err){
+  return {
+        status: 200,
+        jsonBody: [],
+      };
+  }
 }
 
 app.http("bsky", {
