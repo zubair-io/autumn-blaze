@@ -38,8 +38,14 @@ export async function ssr(request: HttpRequest, context: InvocationContext): Pro
 
     try {
         // Dynamic import to load the Angular server bundle
-        // Adjust the path to point to the built server bundle
-        const serverBundlePath = path.join(__dirname, '../../../../SugarMaple/dist/maple/server/server.mjs');
+        // In production (Azure), artifacts are downloaded to 'fe-dist'
+        let serverBundlePath = path.join(__dirname, '../../fe-dist/server/server.mjs');
+        
+        // In local development, use the relative path to SugarMaple
+        const fs = require('fs');
+        if (!fs.existsSync(serverBundlePath)) {
+             serverBundlePath = path.join(__dirname, '../../../../SugarMaple/dist/maple/server/server.mjs');
+        }
         // Use new Function to bypass TypeScript transpiling import() to require()
         const dynamicImport = new Function('specifier', 'return import(specifier)');
         const serverBundle = await dynamicImport(serverBundlePath);
