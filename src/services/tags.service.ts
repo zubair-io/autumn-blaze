@@ -183,4 +183,41 @@ export class TagService {
 
     return tag;
   }
+
+  /**
+   * Get or create the user's documents tag
+   * Each user has their own documents folder tag
+   */
+  async getOrCreateDocumentsTag(userId: string): Promise<ITagDocument> {
+    let tag = await Tag.findOne({
+      type: "folder",
+      value: "documents",
+      "sharing.sharedWith": {
+        $elemMatch: {
+          userId: userId,
+          accessLevel: "write",
+        },
+      },
+    });
+
+    if (!tag) {
+      const newTag = new Tag({
+        type: "folder",
+        value: "documents",
+        label: "Documents",
+        sharing: {
+          sharedWith: [
+            {
+              userId: userId,
+              accessLevel: "write",
+            },
+          ],
+          isPublic: false,
+        },
+      });
+      return await newTag.save();
+    }
+
+    return tag;
+  }
 }
