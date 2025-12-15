@@ -8,8 +8,8 @@ on:
     branches:
       - main
   workflow_dispatch:
-  repository_dispatch:
-    types: [fe-build-complete]
+  # repository_dispatch:
+  #   types: [fe-build-complete]
 
 env:
   AZURE_FUNCTIONAPP_PACKAGE_PATH: "." # set this to the path to your web app project, defaults to the repository root
@@ -27,14 +27,14 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
 
-      - name: Download FE Artifacts
-        shell: pwsh
-        run: |
-          az login --service-principal -u ${{ secrets.AZURE_CLIENT_ID }} -p ${{ secrets.AZURE_CLIENT_SECRET }} --tenant ${{ secrets.AZURE_TENANT_ID }}
-          az storage blob download-batch -d fe-dist -s justmaple/server --account-name hornbeam --auth-mode key
-          az logout
-        env:
-            AZURE_STORAGE_KEY: ${{ secrets.AZURE_STORAGE_KEY }}
+      # - name: Download FE Artifacts
+      #   shell: pwsh
+      #   run: |
+      #     az login --service-principal -u ${{ secrets.AZURE_CLIENT_ID }} -p ${{ secrets.AZURE_CLIENT_SECRET }} --tenant ${{ secrets.AZURE_TENANT_ID }}
+      #     az storage blob download-batch -d fe-dist -s justmaple/server --account-name hornbeam --auth-mode key
+      #     az logout
+      #   env:
+      #       AZURE_STORAGE_KEY: ${{ secrets.AZURE_STORAGE_KEY }}
 
       - name: "Resolve Project Dependencies Using Npm"
         shell: pwsh
