@@ -8,6 +8,7 @@ import { authenticateRequest } from "../middleware/auth";
 
 /**
  * Azure Function to provide SignalR connection info with authentication
+ * Used for the Just-Maple chat feature
  * @param request The HTTP request
  * @param context The function invocation context
  * @returns An HTTP response with the SignalR connection info
@@ -16,7 +17,7 @@ export async function syncAuth(
   request: HttpRequest,
   context: InvocationContext,
 ): Promise<HttpResponseInit> {
-  context.log("Processing SignalR authentication request");
+  context.log("Processing SignalR authentication request for chat hub");
 
   try {
     // Use your existing authorization function to authenticate the request
@@ -79,7 +80,7 @@ app.http("syncAuth", {
     {
       type: "signalRConnectionInfo",
       name: "connectionInfo",
-      hubName: "paths",
+      hubName: "chat",
       connectionStringSetting: "AzureSignalRConnectionString",
       userId: "{query.userId}", // This will be provided by the client
     },
