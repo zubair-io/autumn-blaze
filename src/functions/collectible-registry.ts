@@ -228,7 +228,7 @@ async function syncLegoSets(
           await CollectibleRegistry.findByIdAndUpdate(existingRegistry._id, {
             upc: newData.upc || existingRegistry.upc,
             ean: newData.ean || existingRegistry.ean,
-            title: newData.title || existingRegistry.title,
+            title: set.title || existingRegistry.title,
             description: newData.description || existingRegistry.description,
             images: newData.images || existingRegistry.images,
             tags: newData.tags || existingRegistry.tags,
