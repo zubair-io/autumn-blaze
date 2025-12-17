@@ -4,7 +4,27 @@ import {
   HttpResponseInit,
   InvocationContext,
 } from "@azure/functions";
-import { authenticateRequest } from "../middleware/auth";
+
+// Paperbark API URL for token verification
+const PAPERBARK_API_URL = process.env.PAPERBARK_API_URL || "https://paperbark.justmaple.app";
+
+/**
+ * Verify JWT token by calling Paperbark API
+ */
+async function verifyPaperbarkToken(token: string): Promise<{ userId: string }> {
+  const response = await fetch(`${PAPERBARK_API_URL}/api/auth/me`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Token verification failed: ${response.status}`);
+  }
+
+  const user = await response.json() as { _id: string };
+  return { userId: user._id };
+}
 
 /**
  * Azure Function to provide SignalR connection info with authentication
@@ -20,9 +40,16 @@ export async function syncAuth(
   context.log("Processing SignalR authentication request for chat hub");
 
   try {
-    // Use your existing authorization function to authenticate the request
-    const auth = await authenticateRequest(request, "write");
-    const userId = auth.sub;
+    // Get token from Authorization header
+    const authHeader = request.headers.get("authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return { status: 401, body: "No token provided" };
+    }
+    const token = authHeader.split(" ")[1];
+
+    // Verify token via Paperbark API
+    const auth = await verifyPaperbarkToken(token);
+    const userId = auth.userId;
 
     if (!userId) {
       context.error("User ID not found in auth.sub");

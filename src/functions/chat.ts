@@ -4,7 +4,21 @@ import {
   HttpResponseInit,
   InvocationContext,
 } from "@azure/functions";
-import { authenticateRequest } from "../middleware/auth";
+
+// API key for server-to-server auth from Paperbark
+const PAPERBARK_SERVICE_KEY = process.env.PAPERBARK_SERVICE_KEY;
+
+/**
+ * Verify service-to-service API key
+ */
+function verifyServiceKey(request: HttpRequest): boolean {
+  const authHeader = request.headers.get("authorization");
+  if (!authHeader?.startsWith("Bearer ")) {
+    return false;
+  }
+  const key = authHeader.split(" ")[1];
+  return key === PAPERBARK_SERVICE_KEY;
+}
 
 /**
  * Chat event types for Just-Maple chat feature
@@ -33,11 +47,8 @@ async function broadcastChatEvent(
   context.log("Processing chat broadcast request");
 
   try {
-    // Authenticate the request
-    const auth = await authenticateRequest(request, "write");
-    const senderId = auth.sub;
-
-    if (!senderId) {
+    // Verify service-to-service API key
+    if (!verifyServiceKey(request)) {
       return {
         status: 401,
         jsonBody: { error: "Unauthorized" },
@@ -46,21 +57,6 @@ async function broadcastChatEvent(
 
     const body = (await request.json()) as BroadcastRequest;
     const { event, recipientUserIds } = body;
-
-    if (!event || !recipientUserIds || !Array.isArray(recipientUserIds)) {
-      return {
-        status: 400,
-        jsonBody: { error: "Invalid request body" },
-      };
-    }
-
-    // Verify sender matches the event userId
-    if (event.userId !== senderId) {
-      return {
-        status: 403,
-        jsonBody: { error: "Forbidden: userId mismatch" },
-      };
-    }
 
     // Create SignalR messages for each recipient
     const messages = recipientUserIds.map((userId) => ({
@@ -95,10 +91,8 @@ async function broadcastTyping(
   context.log("Processing typing indicator broadcast");
 
   try {
-    const auth = await authenticateRequest(request, "write");
-    const senderId = auth.sub;
-
-    if (!senderId) {
+    // Verify service-to-service API key
+    if (!verifyServiceKey(request)) {
       return {
         status: 401,
         jsonBody: { error: "Unauthorized" },
@@ -107,13 +101,14 @@ async function broadcastTyping(
 
     const body = (await request.json()) as {
       tagId: string;
+      userId: string;
       isTyping: boolean;
       recipientUserIds: string[];
     };
 
-    const { tagId, isTyping, recipientUserIds } = body;
+    const { tagId, userId, isTyping, recipientUserIds } = body;
 
-    if (!tagId || !recipientUserIds || !Array.isArray(recipientUserIds)) {
+    if (!tagId || !userId || !recipientUserIds || !Array.isArray(recipientUserIds)) {
       return {
         status: 400,
         jsonBody: { error: "Invalid request body" },
@@ -122,19 +117,19 @@ async function broadcastTyping(
 
     const typingEvent: ChatEvent = {
       action: "typing",
-      data: { tagId, userId: senderId, isTyping },
+      data: { tagId, userId, isTyping },
       tagId,
-      userId: senderId,
+      userId,
       timestamp: new Date().toISOString(),
     };
 
     // Create SignalR messages for each recipient (excluding sender)
     const messages = recipientUserIds
-      .filter((id) => id !== senderId)
-      .map((userId) => ({
+      .filter((id) => id !== userId)
+      .map((recipientId) => ({
         target: "newMessage",
         arguments: [typingEvent],
-        userId,
+        userId: recipientId,
       }));
 
     context.extraOutputs.set("signalRMessages", messages);
