@@ -4,26 +4,28 @@ import {
   HttpResponseInit,
   InvocationContext,
 } from "@azure/functions";
+import * as jwt from "jsonwebtoken";
 
-// Paperbark API URL for token verification
-const PAPERBARK_API_URL = process.env.PAPERBARK_API_URL || "https://paperbark.justmaple.app";
+// Shared JWT secret with Paperbark
+const JWT_SECRET = process.env.PAPERBARK_JWT_SECRET || "dev-secret-change-in-production";
+
+interface JWTPayload {
+  sub: string;
+  email: string;
+  exp: number;
+  iat: number;
+}
 
 /**
- * Verify JWT token by calling Paperbark API
+ * Verify JWT token locally using shared secret
  */
-async function verifyPaperbarkToken(token: string): Promise<{ userId: string }> {
-  const response = await fetch(`${PAPERBARK_API_URL}/api/auth/me`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error(`Token verification failed: ${response.status}`);
+function verifyPaperbarkToken(token: string): { userId: string } {
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET) as JWTPayload;
+    return { userId: decoded.sub };
+  } catch (error) {
+    throw new Error(`Token verification failed: ${error.message}`);
   }
-
-  const user = await response.json() as { _id: string };
-  return { userId: user._id };
 }
 
 /**
