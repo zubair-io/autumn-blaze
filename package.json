@@ -7,7 +7,7 @@
     "watch": "tsc -w",
     "clean": "rimraf dist",
     "prestart": "npm run clean && npm run build",
-    "start": "concurrently \"npm run watch\" \"func start --typescript --verbose --logLevel Debug\"",
+    "start": "concurrently \"npm run watch\" \"func start --typescript --verbose --logLevel Debug --port 7071\"",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
