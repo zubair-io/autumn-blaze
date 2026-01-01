@@ -7,7 +7,8 @@ import {
 import * as jwt from "jsonwebtoken";
 
 // Shared JWT secret with Paperbark
-const JWT_SECRET = process.env.PAPERBARK_JWT_SECRET || "dev-secret-change-in-production";
+const JWT_SECRET =
+  process.env.PAPERBARK_JWT_SECRET || "dev-secret-change-in-production";
 
 interface JWTPayload {
   sub: string;
@@ -115,4 +116,85 @@ app.http("syncAuth", {
     },
   ],
   handler: syncAuth,
+});
+
+/**
+ * Azure Function to provide SignalR connection info for collaboration hub
+ * Used for the Just-Maple collaboration feature
+ */
+export async function syncAuthCollab(
+  request: HttpRequest,
+  context: InvocationContext,
+): Promise<HttpResponseInit> {
+  context.log("Processing SignalR authentication request for collab hub");
+
+  try {
+    // Get token from Authorization header
+    const authHeader = request.headers.get("authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return { status: 401, body: "No token provided" };
+    }
+    const token = authHeader.split(" ")[1];
+
+    // Verify token via Paperbark API
+    const auth = await verifyPaperbarkToken(token);
+    const userId = auth.userId;
+
+    if (!userId) {
+      context.error("User ID not found in auth.sub");
+      return {
+        status: 400,
+        body: "User ID not found in authentication data",
+      };
+    }
+    const requestedUserId = request.query.get("userId");
+
+    // Security check: Verify that the requested user ID matches the authenticated user ID
+    if (requestedUserId && requestedUserId !== userId) {
+      context.error(`User ID mismatch: ${requestedUserId} vs ${userId}`);
+      return {
+        status: 403,
+        body: "Forbidden: User ID does not match authenticated user",
+      };
+    }
+
+    context.log(`Authenticated user ID for collab: ${userId}`);
+
+    // Get SignalR connection info for collab hub
+    const connectionInfo = await context.extraInputs.get("connectionInfo");
+
+    if (!connectionInfo) {
+      return {
+        status: 500,
+        body: "Error retrieving SignalR connection information",
+      };
+    }
+
+    return {
+      status: 200,
+      jsonBody: connectionInfo,
+    };
+  } catch (e) {
+    context.error("Authorization failed:", e);
+    return {
+      status: 401,
+      body: "401 Unauthorized",
+    };
+  }
+}
+
+app.http("syncAuthCollab", {
+  methods: ["GET", "POST"],
+  authLevel: "anonymous",
+  route: "signalr/collab",
+  extraInputs: [
+    {
+      type: "signalRConnectionInfo",
+      name: "connectionInfo",
+      hubName: "collab", // Separate hub for collaboration
+      connectionStringSetting: "AzureSignalRConnectionString",
+      userId: "{query.userId}",
+    },
+  ],
+  handler: syncAuthCollab,
 });
