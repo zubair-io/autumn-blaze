@@ -24,13 +24,14 @@ function verifyServiceKey(request: HttpRequest): boolean {
  * Collaboration event types for Just-Maple collaboration feature
  */
 interface CollabEvent {
-  type: "steps" | "init" | "resync";
+  type: "steps" | "init" | "resync" | "automerge-sync";
   noteId: string;
   version?: number;
   steps?: unknown[];
   clientIDs?: string[];
   clientID?: string;
   doc?: unknown; // ProseMirror document
+  syncMessage?: string; // Base64-encoded Automerge sync message
 }
 
 interface BroadcastCollabRequest {
